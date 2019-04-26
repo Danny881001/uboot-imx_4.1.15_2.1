@@ -208,6 +208,8 @@ static int do_mdio(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 	reghi  = last_reg_hi;
 	data   = last_data;
 
+	printf("pos is %d\n", pos);
+
 	bus = mdio_get_current_dev();
 
 	if (flag & CMD_FLAG_REPEAT)
