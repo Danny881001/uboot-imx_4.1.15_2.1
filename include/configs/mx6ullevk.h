@@ -338,6 +338,7 @@
 #define CONFIG_CMD_MII
 #define CONFIG_FEC_MXC
 #define CONFIG_MII
+/*#define CONFIG_FEC_ENET_DEV		1*/
 #define CONFIG_FEC_ENET_DEV		0
 
 #if (CONFIG_FEC_ENET_DEV == 0)

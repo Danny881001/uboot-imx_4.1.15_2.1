@@ -46,8 +46,10 @@ save_boot_params_ret:
 	bicne	r0, r0, #0x1f		@ clear all mode bits
 	orrne	r0, r0, #0x13		@ set SVC mode
 	orr	r0, r0, #0xc0		@ disable FIQ and IRQ
-	msr	cpsr,r0
-
+/*	msr	cpsr,r0
+*/
+	bic r0,r0,#0x100
+	msr cpsr_cx,r0
 /*
  * Setup vector:
  * (OMAP4 spl TEXT_BASE is not 32 byte aligned.

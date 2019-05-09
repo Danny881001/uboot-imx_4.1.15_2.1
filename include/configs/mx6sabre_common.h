@@ -140,7 +140,11 @@
 	"fdt_file=undefined\0" \
 	"fdt_addr=0x18000000\0" \
 	"boot_fdt=try\0" \
-	"ip_dyn=yes\0" \
+	"ipaddr=192.168.210.245\0" \
+	"ethaddr=08:00:3e:26:0a:5b\0" \
+	"serverip=192.168.210.11\0" \
+	"netmask=255.255.255.0\0" \
+	"gatewayip=192.168.210.1\0" \
 	"console=" CONFIG_CONSOLE_DEV "\0" \
 	"dfuspi=dfu 0 sf 0:0:10000000:0\0" \
 	"dfu_alt_info_spl=spl raw 0x400\0" \
