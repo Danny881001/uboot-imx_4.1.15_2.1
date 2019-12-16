@@ -44,6 +44,60 @@
 #endif
 #endif /*CONFIG_FSL_FASTBOOT*/
 
+#include <pwm.h>
+
+typedef unsigned int   UINT32,UINT_T,DWORD;
+typedef unsigned long  UINT32_T;
+typedef volatile unsigned long  VUINT32_T;
+typedef unsigned char           UINT8,UINT8_T,BYTE,BOOL;
+typedef unsigned short          UINT16,UINT16_T,WORD;
+//typedef unsigned short          wchar_t;
+/*                              0    1    2    3    4    5    6    7    8    9    a    b    c    d    e    f    */
+UINT8_T eeprom_buff[EE_SIZE] = {0x92,0x00,0x73,0x00,0x6E,0x00,0x77,0x01,0x67,0x00,0x64,0x00,0x00,0x00,0x00,0x00,/*0*/
+								0x00,0x00,0x01,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,/*1*/
+								0x00,0x05,0x20,0x03,0x00,0x10,0x92,0x02,0x00,0x00,0x00,0x08,0x00,0x00,0x00,0x00,/*2*/
+								0x00,0x00,0x08,0x00,0x00,0x00,0x00,0x00,0x02,0x01,0x01,0x01,0x40,0x00,0xD0,0x01,/*3*/
+								0xFF,0x00,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,/*4*/
+								0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,/*5*/
+								0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,/*6*/
+								0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,/*7*/
+								0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,/*8*/
+								0x66,0x55,0x44,0x33,0x22,0x10,0x55,0x55,0xC0,0xA8,0x00,0xFD,0xC0,0xA8,0x00,0x01,/*9*/
+								0xFF,0xFF,0xFF,0x00,0xC0,0xA8,0x00,0xFD,0xC0,0xA8,0x00,0x01,0xFF,0xFF,0xFF,0x00,/*a*/
+								0xD8,0x07,0x55,0x55,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,/*b*/
+								0x00,0x00,0x08,0x00,0x00,0x00,0x18,0x00,0xC9,0x27,0x1F,0x00,0xCA,0x27,0x1F,0x00,/*c*/
+								0xcc,0x7c,0x0a,0x00,0x3f,0xf6,0xf0,0xe4,0xaa,0x55,0x00,0x00,0xff,0xff,0xff,0xff,/*d*/
+								0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,/*e*/
+								0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF /*f*/
+								/*0xa5,0x57,0xbd,0xb3,0x37,0xca,0xbf,0xe5,0x6d,0x1a,0x3e,0xbe,0x8e,0x34,0xf8,0x3e*/
+								};
+
+								
+int lcdinit = 0;
+int bootlinux = 0;
+int eth_exist;
+UINT16_T show_logo=0;			   // 默认显示LOGO
+UINT8_T lcd_type=0; 			 // lcd_type
+unsigned short hardware_version;
+int current_brightness=0;	  // 当前亮度
+unsigned short * Frm_Buf ;
+int SoftwareVersion=200;		// 软件版本号
+
+typedef enum SWITCHSTATE {
+    NormalBootLinux,
+    DownLoadMode,
+    TouchCalibrate,
+    Setup,
+    NULLSTATE
+}SWITCHSTATE;
+
+#if !defined(__ET070__) && !defined(__MT4523V__)
+static SWITCHSTATE bootsel;
+#endif
+
+
+
+
 DECLARE_GLOBAL_DATA_PTR;
 
 #define UART_PAD_CTRL  (PAD_CTL_PUS_100K_UP |			\
@@ -77,6 +131,8 @@ DECLARE_GLOBAL_DATA_PTR;
 #define I2C_PAD MUX_PAD_CTRL(I2C_PAD_CTRL)
 
 #define DISP0_PWR_EN	IMX_GPIO_NR(1, 21)
+#define LVDS0_BKLIGHT_EN	IMX_GPIO_NR(6, 10)
+
 
 int dram_init(void)
 {
@@ -127,10 +183,11 @@ static iomux_v3_cfg_t const usdhc2_pads[] = {
 	MX6_PAD_SD2_DAT1__SD2_DATA1	| MUX_PAD_CTRL(USDHC_PAD_CTRL),
 	MX6_PAD_SD2_DAT2__SD2_DATA2	| MUX_PAD_CTRL(USDHC_PAD_CTRL),
 	MX6_PAD_SD2_DAT3__SD2_DATA3	| MUX_PAD_CTRL(USDHC_PAD_CTRL),
-	MX6_PAD_NANDF_D4__SD2_DATA4	| MUX_PAD_CTRL(USDHC_PAD_CTRL),
+/*	MX6_PAD_NANDF_D4__SD2_DATA4	| MUX_PAD_CTRL(USDHC_PAD_CTRL),
 	MX6_PAD_NANDF_D5__SD2_DATA5	| MUX_PAD_CTRL(USDHC_PAD_CTRL),
 	MX6_PAD_NANDF_D6__SD2_DATA6	| MUX_PAD_CTRL(USDHC_PAD_CTRL),
-	MX6_PAD_NANDF_D7__SD2_DATA7	| MUX_PAD_CTRL(USDHC_PAD_CTRL),
+	MX6_PAD_NANDF_D7__SD2_DATA7	| MUX_PAD_CTRL(USDHC_PAD_CTRL), */
+	MX6_PAD_NANDF_D3__GPIO2_IO03	| MUX_PAD_CTRL(NO_PAD_CTRL), /* WP */
 	MX6_PAD_NANDF_D2__GPIO2_IO02	| MUX_PAD_CTRL(NO_PAD_CTRL), /* CD */
 };
 
@@ -141,10 +198,11 @@ static iomux_v3_cfg_t const usdhc3_pads[] = {
 	MX6_PAD_SD3_DAT1__SD3_DATA1 | MUX_PAD_CTRL(USDHC_PAD_CTRL),
 	MX6_PAD_SD3_DAT2__SD3_DATA2 | MUX_PAD_CTRL(USDHC_PAD_CTRL),
 	MX6_PAD_SD3_DAT3__SD3_DATA3 | MUX_PAD_CTRL(USDHC_PAD_CTRL),
-	MX6_PAD_SD3_DAT4__SD3_DATA4 | MUX_PAD_CTRL(USDHC_PAD_CTRL),
+/*	MX6_PAD_SD3_DAT4__SD3_DATA4 | MUX_PAD_CTRL(USDHC_PAD_CTRL),
 	MX6_PAD_SD3_DAT5__SD3_DATA5 | MUX_PAD_CTRL(USDHC_PAD_CTRL),
 	MX6_PAD_SD3_DAT6__SD3_DATA6 | MUX_PAD_CTRL(USDHC_PAD_CTRL),
-	MX6_PAD_SD3_DAT7__SD3_DATA7 | MUX_PAD_CTRL(USDHC_PAD_CTRL),
+	MX6_PAD_SD3_DAT7__SD3_DATA7 | MUX_PAD_CTRL(USDHC_PAD_CTRL),  */
+	MX6_PAD_NANDF_D1__GPIO2_IO01	| MUX_PAD_CTRL(NO_PAD_CTRL), /* WP */
 	MX6_PAD_NANDF_D0__GPIO2_IO00    | MUX_PAD_CTRL(NO_PAD_CTRL), /* CD */
 };
 
@@ -167,11 +225,23 @@ static iomux_v3_cfg_t const ecspi1_pads[] = {
 	MX6_PAD_KEY_COL1__ECSPI1_MISO | MUX_PAD_CTRL(SPI_PAD_CTRL),
 	MX6_PAD_KEY_ROW0__ECSPI1_MOSI | MUX_PAD_CTRL(SPI_PAD_CTRL),
 	MX6_PAD_KEY_ROW1__GPIO4_IO09 | MUX_PAD_CTRL(NO_PAD_CTRL),
+	MX6_PAD_KEY_COL2__GPIO4_IO10 | MUX_PAD_CTRL(NO_PAD_CTRL),
 };
+
+static iomux_v3_cfg_t const ecspi5_pads[] = {
+	MX6_PAD_SD1_CMD__ECSPI5_MOSI | MUX_PAD_CTRL(SPI_PAD_CTRL),
+	MX6_PAD_SD1_CLK__ECSPI5_SCLK | MUX_PAD_CTRL(SPI_PAD_CTRL),
+	MX6_PAD_SD1_DAT0__ECSPI5_MISO | MUX_PAD_CTRL(SPI_PAD_CTRL),
+	MX6_PAD_SD1_DAT1__GPIO1_IO17 | MUX_PAD_CTRL(NO_PAD_CTRL),
+};
+
 
 static void setup_spi(void)
 {
+	/* TSC2046 TOUCH ADC */
 	imx_iomux_v3_setup_multiple_pads(ecspi1_pads, ARRAY_SIZE(ecspi1_pads));
+	/* DS1302 RTC */
+	//imx_iomux_v3_setup_multiple_pads(ecspi5_pads, ARRAY_SIZE(ecspi5_pads));
 }
 
 int board_spi_cs_gpio(unsigned bus, unsigned cs)
@@ -248,6 +318,12 @@ iomux_v3_cfg_t const di0_pads[] = {
 	MX6_PAD_DI0_PIN3__IPU1_DI0_PIN03,		/* DISP0_VSYNC */
 };
 
+iomux_v3_cfg_t const backlight_pads[] = {
+	MX6_PAD_NANDF_RB0__GPIO6_IO10 | MUX_PAD_CTRL(NO_PAD_CTRL),	/*BACKLIGHT ENABLE*/
+	MX6_PAD_GPIO_9__PWM1_OUT | MUX_PAD_CTRL(NO_PAD_CTRL),		/*BACKLIGHT DIMMING*/
+};
+
+
 static void setup_iomux_uart(void)
 {
 	imx_iomux_v3_setup_multiple_pads(uart1_pads, ARRAY_SIZE(uart1_pads));
@@ -309,7 +385,10 @@ struct fsl_esdhc_cfg usdhc_cfg[3] = {
 };
 
 #define USDHC2_CD_GPIO	IMX_GPIO_NR(2, 2)
+#define USDHC2_WP_GPIO IMX_GPIO_NR(2, 3)
 #define USDHC3_CD_GPIO	IMX_GPIO_NR(2, 0)
+#define USDHC3_WP_GPIO IMX_GPIO_NR(2, 1)
+
 
 int board_mmc_get_env_dev(int devno)
 {
@@ -359,13 +438,18 @@ int board_mmc_init(bd_t *bis)
 		case 0:
 			imx_iomux_v3_setup_multiple_pads(
 				usdhc2_pads, ARRAY_SIZE(usdhc2_pads));
-			gpio_direction_input(USDHC2_CD_GPIO);
+			//gpio_direction_input(USDHC2_CD_GPIO);
+			gpio_direction_output(USDHC2_CD_GPIO,0);
+			mdelay(10);
+			gpio_direction_output(USDHC2_CD_GPIO,1);
+			gpio_direction_input(USDHC2_WP_GPIO);
 			usdhc_cfg[0].sdhc_clk = mxc_get_clock(MXC_ESDHC2_CLK);
 			break;
 		case 1:
 			imx_iomux_v3_setup_multiple_pads(
 				usdhc3_pads, ARRAY_SIZE(usdhc3_pads));
 			gpio_direction_input(USDHC3_CD_GPIO);
+			gpio_direction_input(USDHC3_WP_GPIO);
 			usdhc_cfg[1].sdhc_clk = mxc_get_clock(MXC_ESDHC3_CLK);
 			break;
 		case 2:
@@ -657,6 +741,9 @@ static void disable_lvds(struct display_info_t const *dev)
 		 IOMUXC_GPR2_LVDS_CH1_MODE_MASK);
 
 	writel(reg, &iomux->gpr[2]);
+
+	/* backlight disable */
+	gpio_direction_output(LVDS0_BKLIGHT_EN, 0);
 }
 
 static void do_enable_hdmi(struct display_info_t const *dev)
@@ -664,6 +751,32 @@ static void do_enable_hdmi(struct display_info_t const *dev)
 	disable_lvds(dev);
 	imx_enable_hdmi_phy();
 }
+
+static void enable_backlight(void)
+{
+	imx_iomux_v3_setup_multiple_pads(backlight_pads,
+					 ARRAY_SIZE(backlight_pads));
+
+	/* backlight enable */
+	gpio_direction_output(LVDS0_BKLIGHT_EN, 1);
+	/* LCD power enable */
+	//gpio_direction_output(DISP0_PWR_EN, 1);
+
+	/* enable backlight PWM 1 */
+	if (pwm_init(0, 0, 0))
+		goto error;
+	/* duty cycle 500ns, period: 3000ns */
+	if (pwm_config(0, 50000, 300000))
+		goto error;
+	if (pwm_enable(0))
+		goto error;
+	return;
+
+error:
+	puts("error init pwm for backlight\n");
+	return;
+}
+
 
 static void enable_lvds(struct display_info_t const *dev)
 {
@@ -673,6 +786,8 @@ static void enable_lvds(struct display_info_t const *dev)
 	reg |= IOMUXC_GPR2_DATA_WIDTH_CH0_18BIT |
 	       IOMUXC_GPR2_DATA_WIDTH_CH1_18BIT;
 	writel(reg, &iomux->gpr[2]);
+
+	enable_backlight();
 }
 
 struct display_info_t const displays[] = {{
@@ -781,8 +896,8 @@ static void setup_display(void)
 	     | IOMUXC_GPR2_DATA_WIDTH_CH1_18BIT
 	     | IOMUXC_GPR2_BIT_MAPPING_CH0_SPWG
 	     | IOMUXC_GPR2_DATA_WIDTH_CH0_18BIT
-	     | IOMUXC_GPR2_LVDS_CH0_MODE_DISABLED
-	     | IOMUXC_GPR2_LVDS_CH1_MODE_ENABLED_DI0;
+	     | IOMUXC_GPR2_LVDS_CH0_MODE_ENABLED_DI0
+	     | IOMUXC_GPR2_LVDS_CH1_MODE_DISABLED;
 	writel(reg, &iomux->gpr[2]);
 
 	reg = readl(&iomux->gpr[3]);
@@ -792,6 +907,32 @@ static void setup_display(void)
 	       << IOMUXC_GPR3_LVDS1_MUX_CTL_OFFSET);
 	writel(reg, &iomux->gpr[3]);
 }
+
+void show_evdown(){
+	char info[128];
+}
+
+#if defined(CONFIG_CONSOLE_EXTRA_INFO)
+/*
+ * Return text to be printed besides the logo.
+ */
+void video_get_info_str (int line_number, char *info)
+{
+	unsigned char hw_version = 116;
+	unsigned char product_id = 169;
+	unsigned char sw_version = 200;
+	unsigned char build_num  = 199;
+
+	if (line_number == 1)
+		//strcpy (info, " Board: IPEK01");
+		sprintf(info, "Hardware Version %d.%02d.%d", hw_version/100, hw_version%100, product_id);
+	else if(line_number == 2)
+		sprintf(info, "Bootloader Version %d.%02d Build %d", sw_version/100, sw_version%100, build_num);
+	else
+		info[0] = '\0';
+}
+#endif
+
 #endif /* CONFIG_VIDEO_IPUV3 */
 
 /*
@@ -897,6 +1038,54 @@ int board_early_init_f(void)
 	return 0;
 }
 
+#if !defined(__ET070__) && !defined(__MT4523V__)
+//////////////////////////////////////////////////////////////////////////////////
+//	
+//	获取拨码开光状态
+//	
+//////////////////////////////////////////////////////////////////////////////////
+static SWITCHSTATE GetDIPSwitchState(void)
+{
+
+    SWITCHSTATE ret;
+	unsigned char DIPSwitchState;
+/*
+    *(volatile unsigned long *)MFP_54 = 0x40;
+    *(volatile unsigned long *)MFP_55 = 0x40;
+    GPDR1 &= ~(GPIO_bit(22)|GPIO_bit(23));  // input
+    
+    dummy_delay(0x10000);             // 延时10毫秒等待输入稳定
+    DIPSwitchState = ((GPLR1&(GPIO_bit(22)|GPIO_bit(23)))>>22);
+*/
+	DIPSwitchState = 2;
+    switch(DIPSwitchState) {
+
+        case 0:
+            ret = Setup;
+        break;
+
+        case 1:
+            ret = TouchCalibrate;
+        break;
+
+        case 2:
+            ret = DownLoadMode;
+        break;
+
+        case 3:
+            ret = NormalBootLinux;
+        break;
+
+    default:
+        ret = NULLSTATE;
+        break;
+    }
+
+    return ret;
+}
+#endif
+
+
 int board_init(void)
 {
 	/* address of boot parameters */
@@ -908,7 +1097,7 @@ int board_init(void)
 	setup_i2c(1, CONFIG_SYS_I2C_SPEED, 0x7f, &i2c_pad_info1);
 
 #ifdef CONFIG_USB_EHCI_MX6
-	setup_usb();
+	//setup_usb();
 #endif
 
 #if defined(CONFIG_MX6DL) && defined(CONFIG_MXC_EPDC)
@@ -922,6 +1111,9 @@ int board_init(void)
 #ifdef CONFIG_FEC_MXC
 	setup_fec();
 #endif
+
+	bootsel = GetDIPSwitchState(); 
+    DEBUG_INFO("\n\nbootsel = %d\r\n",bootsel);
 
 	return 0;
 }
@@ -1157,9 +1349,181 @@ int board_late_init(void)
 
 int checkboard(void)
 {
-	puts("Board: MX6-SabreSD\n");
+	puts("Board: MX6-Peach\n");
 	return 0;
 }
+
+void i2c_init_board(void)
+{
+	puts("i2c_init_board\n");
+}
+
+#if defined(DEBUG_MODE)
+static void kinco_display_ee(void)
+{
+	UINT8_T i,j;	
+	printf("EE DATA:\r\n");
+	printf("      ");
+	for(i=0;i<16;i++)
+		printf("%01X  ",i);
+	printf("\n");
+	for(j=0;j<16;j++){
+		printf("%01X:    ",j);
+		for(i=0;i<16;i++) 
+			printf("%02x ",eeprom_buff[16*j+i]);
+		printf("\n");
+		i = 0;
+	}
+}
+#endif
+
+
+#ifdef CONFIG_MISC_INIT_R
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+//
+//   外围设备初始化
+//
+
+int misc_init_r (void)
+{
+	char *env;
+	
+	DEBUG_INFO("misc_init_r\r\n");
+#if 0
+#if defined(__ET070__)
+	load_ee();	//load EE from NAND, save to EE_PY_BASE
+#else
+	// read 256 bytesform twsi-eeprom 
+	memset(eeprom_buff,0x0,EE_DATA_SIZE);
+	ee_read(eeprom_buff,0x0,EE_DATA_SIZE);
+#endif
+#endif
+	//memcpy((void *)EE_PY_BASE,(void*)eeprom_buff,EE_DATA_SIZE);	//PASS TO KERNEL
+	//memcpy((void *)EE_PY_BASE,(void*)eeprom_buff,256);
+	memcpy((unsigned char *)&lcd_type, eeprom_buff+LCD_TYPE, 1);
+	memcpy((unsigned char *)&hardware_version, eeprom_buff+HARDWARE_VERSION, 2);
+	hardware_version=110;
+	printf("hardware_version=%d\r\n",hardware_version);
+	memcpy((unsigned char *)&show_logo, eeprom_buff+LOGO_DISP, 2);
+	//have_eth();
+	
+#if !defined(__ET070__) && !defined(__MT4523V__)
+	if(bootsel==DownLoadMode)   // 如果是download模式则不显示logo  0--显示  1--不显示
+		show_logo = 1;
+#endif
+
+#if defined(DEBUG_MODE)
+	kinco_display_ee();
+	printf("lcd_type=%d\r\n",lcd_type);
+#if !defined(__ET070__) && !defined(__MT4523V__)
+	printf("bootsel=%d\r\n",bootsel);
+#endif
+	printf("show_logo=%d\r\n",show_logo);
+	printf("eth_exist=%d\r\n",eth_exist);	
+#endif
+
+#if defined(__ET070__) || defined(__MT4523V__)
+	//  lcd init 
+	//LCD_init();
+#endif
+
+#if !defined (__ET070__)
+	//  初始化PWM3 --- 150KHz ，给CPLD做通信方式切换的Clock
+	//cpld_pwm3();
+#endif
+
+#if !defined (__ET070__) && !defined(__MT4523V__)
+
+    if(bootsel == DownLoadMode)
+    {
+        setenv("bootcmd","evdown");
+    }
+    else
+    {
+        setenv("bootcmd","evboot");
+    }
+#else
+	setenv("bootcmd","et070boot");
+#endif
+
+#if 0
+    /* primary network interface */
+    env = getenv("ethprime");
+    if(!env)
+       setenv("ethprime","eth0");
+
+    /* default usb mode */
+    env = getenv("usbMode");
+    if(!env)
+       setenv("usbMode","host");
+
+    /* linux boot arguments */
+    env = getenv("default_load_addr");
+    if(!env)
+    	setenv("default_load_addr",CONFIG_SYS_DEF_LOAD_ADDR);
+
+    env = getenv("image_name");
+    if(!env)
+        setenv("image_name",CONFIG_SYS_IMG_NAME);
+
+    env = getenv("bootfile");
+    if(!env)
+        setenv("bootfile",CONFIG_SYS_IMG_NAME);
+
+    env = getenv("initrd_name");
+    if(!env)
+        setenv("initrd_name",CONFIG_SYS_INITRD_NAME);
+
+    env = getenv("initrd_load_addr");
+    if(!env)
+    	setenv("initrd_load_addr",CONFIG_SYS_INITRD_LOAD_ADDR);
+
+    env = getenv("initrd_size");
+    if(!env)
+        setenv("initrd_size",CONFIG_SYS_INITRD_SIZE);
+
+    env = getenv("standalone_mtd");
+    if(!env)
+        setenv("standalone_mtd","fsload $(default_load_addr) $(image_name);setenv bootargs $(bootargs) root=/dev/mtdblock0 rw rootfstype=jffs2 ip=$(ipaddr):$(serverip)$(bootargs_end);bootm $(default_load_addr);");
+
+    env = getenv("standalone_initrd");
+    if(!env)
+        setenv("standalone_initrd","fsload $(default_load_addr) $(image_name);fsload $(initrd_load_addr) $(initrd_name);setenv bootargs $(bootargs) root=/dev/ram0 rw initrd=0x$(initrd_load_addr),0x$(initrd_size) ip=$(ipaddr):$(serverip)$(bootargs_end); bootm $(default_load_addr);");
+
+    /* MAC addresses */
+    env = getenv("ethaddr");
+    if(!env)
+        setenv("ethaddr",ETHADDR);
+#endif
+	return 0;
+}
+
+
+#endif
+
+int do_evdown (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
+{
+	DEBUG_INFO("+eviewdownload main\r\n");
+
+
+
+
+	DEBUG_INFO("-eviewdownload main\r\n");
+	return 0;
+}
+
+
+U_BOOT_CMD(
+	evdown,	CONFIG_SYS_MAXARGS,	1,	do_evdown,
+	"evdown  - Download kernel and rootfs through eview USB\\Ether\\Serial.\n",
+	""
+);
+
+
+
 
 #ifdef CONFIG_FSL_FASTBOOT
 

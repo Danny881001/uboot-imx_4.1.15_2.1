@@ -237,8 +237,10 @@ static int init_func_i2c(void)
 {
 	puts("I2C:   ");
 #ifdef CONFIG_SYS_I2C
+	//puts("i2c_init_all	 ");
 	i2c_init_all();
 #else
+	//puts("i2c_init	 ");
 	i2c_init(CONFIG_SYS_I2C_SPEED, CONFIG_SYS_I2C_SLAVE);
 #endif
 	puts("ready\n");

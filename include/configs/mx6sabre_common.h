@@ -153,8 +153,19 @@
 	"fdt_high=0xffffffff\0"	  \
 	"initrd_high=0xffffffff\0" \
 	"mmcdev=" __stringify(CONFIG_SYS_MMC_ENV_DEV) "\0" \
-	"mmcpart=1\0" \
+	"mmcpart=3\0" \
 	"mmcroot=" CONFIG_MMCROOT " rootwait rw\0" \
+	"display=video=mxcfb0:dev=ldb,if=RGB666 ldb=sin0\0" \
+	"fb0_lvds1=video=mxcfb0:dev=ldb,if=RGB666 ldb=sin1\0" \
+	"fb1_lvds1=video=mxcfb1:dev=ldb,if=RGB666 ldb=sin1\0" \
+	"fb0_lvds0=video=mxcfb0:dev=ldb,if=RGB666 ldb=sin0\0" \
+	"fb1_lvds0=video=mxcfb1:dev=ldb,if=RGB666 ldb=sin0\0" \
+	"fb0_hdmi=video=mxcfb0:dev=hdmi,1920x1080M@60,if=RGB24\0" \
+	"fb1_hdmi=video=mxcfb1:dev=hdmi,1920x1080M@60,if=RGB24\0" \
+	"fb0_lcd=video=mxcfb0:dev=lcd,SEIKO-WVGA,if=RGB24\0" \
+	"fb1_lcd=video=mxcfb1:dev=lcd,SEIKO-WVGA,if=RGB24\0" \
+	"lvds_sync=video=mxcfb0:dev=ldb,if=RGB666 ldb=dul1\0" \
+	"set_disp=setenv disp_args ${display}\0" \
 	"mmcautodetect=yes\0" \
 	"update_sd_firmware=" \
 		"if test ${ip_dyn} = yes; then " \
@@ -171,8 +182,7 @@
 		"fi\0" \
 	EMMC_ENV	  \
 	"smp=" CONFIG_SYS_NOSMP "\0"\
-	"mmcargs=setenv bootargs console=${console},${baudrate} ${smp}  root=/dev/mmcblk3p2 rootwait rw video=mxcfb0:dev=hdmi,1920x1080M@60,if=RGB24" \
-		"root=${mmcroot}\0" \
+	"mmcargs=setenv bootargs console=${console},${baudrate} ${smp} root=/dev/mmcblk3p5 rootwait rw ${display}\0" \
 	"loadbootscript=" \
 		"fatload mmc ${mmcdev}:${mmcpart} ${loadaddr} ${script};\0" \
 	"bootscript=echo Running bootscript from mmc ...; " \

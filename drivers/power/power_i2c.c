@@ -16,6 +16,7 @@
 #include <i2c.h>
 #include <linux/compiler.h>
 
+
 int pmic_reg_write(struct pmic *p, u32 reg, u32 val)
 {
 	unsigned char buf[4] = { 0 };

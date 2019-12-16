@@ -90,6 +90,7 @@ struct pmic *pfuze_common_init(unsigned char i2cbus)
 	reg |= SW1xCONF_DVSSPEED_4US;
 	pmic_reg_write(p, PFUZE100_SW1CCONF, reg);
 
+	//printf("---%s\n", __func__);
 	return p;
 }
 #endif
