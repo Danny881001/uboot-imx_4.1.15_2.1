@@ -7,6 +7,7 @@
 #
 
 obj-y  := mx6peach.o
+obj-y	 += font_ascii.o
 
 extra-$(CONFIG_USE_PLUGIN) :=  plugin.bin
 $(obj)/plugin.bin: $(obj)/plugin.o

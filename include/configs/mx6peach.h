@@ -31,15 +31,12 @@
 #define EE_SIZE  EE_DATA_SIZE
 
 
-
 #define CONFIG_PWM_IMX
 #define CONFIG_IMX6_PWM_PER_CLK	66000000
 
 #define CONFIG_CONSOLE_EXTRA_INFO
 
 #define CONFIG_MISC_INIT_R
-
-#undef CONFIG_VIDEO_LOGO
 
 #define CONFIG_NET_RANDOM_ETHADDR
 
@@ -66,6 +63,7 @@
 #endif
 
 #include "mx6sabre_common.h"
+#undef CONFIG_VIDEO_LOGO
 
 
 #define CONFIG_SYS_FSL_USDHC_NUM	3
@@ -175,5 +173,37 @@
 #define LCD_Y_SIZE 0X22
 #define EE_TOUCH_ADJUST_OFFSET 0X60
 #define GUI_RUN_MODE 0xB4	//GUI运行模式2B(0X90,0X24) （0-工程,1-系统设置）//121212:用于ET系列
+
+#define	RGB565(R, G, B)			(((R) >>3) <<11) |(((G) >>2) <<5) |((B) >>3) 
+
+#define    ASCII_OFFSET            0x20
+
+#ifndef  KINCO_F10_LCD
+#define	WHITE		RGB565(0xFF, 0xFF, 0xFF)
+#define	BLACK		RGB565(0x00, 0x00, 0x00)
+#define	RED			RGB565(0xFF, 0x00, 0x00)
+#define	GREEN		RGB565(0x00, 0xFF, 0x00)
+#define	BLUE		RGB565(0x00, 0x00, 0xFF)
+#define	LIGHTGRAY	RGB565(192, 192, 192)
+#define	MIDGRAY	RGB565(128, 128, 128)
+#define	DARKGRAY	RGB565(90, 90, 90)
+#else
+#define RGB888(R,G,B)  ((R<<16)|(G<<8)|(B<<0))
+#define	WHITE		RGB888(0xFF, 0xFF, 0xFF)
+#define	BLACK		RGB888(0x00, 0x00, 0x00)
+#define	RED		RGB888(0xFF, 0x00, 0x00)
+#define	GREEN		RGB888(0x00, 0xFF, 0x00)
+#define	BLUE		RGB888(0x00, 0x00, 0xFF)
+#define	LIGHTGRAY	RGB888(192, 192, 192)
+#define	MIDGRAY		RGB888(128, 128, 128)
+#define	DARKGRAY	RGB888(90, 90, 90)
+#endif
+
+
+#define NOPROTOCOL				0
+#define PROT_BOOTP				68
+#define PROT_TFTP				69
+#define PROT_EVIEW				14
+
 
 #endif                         /* __MX6QSABRESD_CONFIG_H */

@@ -44,7 +44,15 @@
 #endif
 #endif /*CONFIG_FSL_FASTBOOT*/
 
+#include <command.h>
 #include <pwm.h>
+#include "res.h"
+
+#define build_num 100
+
+
+
+extern void *video_fb_address;	/* frame buffer address */
 
 typedef unsigned int   UINT32,UINT_T,DWORD;
 typedef unsigned long  UINT32_T;
@@ -55,7 +63,7 @@ typedef unsigned short          UINT16,UINT16_T,WORD;
 /*                              0    1    2    3    4    5    6    7    8    9    a    b    c    d    e    f    */
 UINT8_T eeprom_buff[EE_SIZE] = {0x92,0x00,0x73,0x00,0x6E,0x00,0x77,0x01,0x67,0x00,0x64,0x00,0x00,0x00,0x00,0x00,/*0*/
 								0x00,0x00,0x01,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,/*1*/
-								0x00,0x05,0x20,0x03,0x00,0x10,0x92,0x02,0x00,0x00,0x00,0x08,0x00,0x00,0x00,0x00,/*2*/
+								0x00,0x04,0x00,0x03,0x00,0x10,0x92,0x02,0x00,0x00,0x00,0x08,0x00,0x00,0x00,0x00,/*2*/
 								0x00,0x00,0x08,0x00,0x00,0x00,0x00,0x00,0x02,0x01,0x01,0x01,0x40,0x00,0xD0,0x01,/*3*/
 								0xFF,0x00,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,/*4*/
 								0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,/*5*/
@@ -83,6 +91,10 @@ int current_brightness=0;	  // 当前亮度
 unsigned short * Frm_Buf ;
 int SoftwareVersion=200;		// 软件版本号
 
+short current_lcd_xsize=0;
+short current_lcd_ysize=0;
+
+
 typedef enum SWITCHSTATE {
     NormalBootLinux,
     DownLoadMode,
@@ -94,6 +106,98 @@ typedef enum SWITCHSTATE {
 #if !defined(__ET070__) && !defined(__MT4523V__)
 static SWITCHSTATE bootsel;
 #endif
+
+
+//////////////////////////////////////////////////////////////////////////////////
+//	
+//	自定义1条指令，作为下载时
+//	
+//////////////////////////////////////////////////////////////////////////////////
+//20 bytes
+typedef struct ee_version
+{
+	WORD 	product_id;
+	WORD 	hw_version;
+	WORD 	gui_version;
+	WORD 	comm_version;
+	WORD 	servo_version;
+	WORD 	gui_userdata_version; //用户数据结构版本号
+	WORD 	gui_comm_protocol_version;
+	WORD 	user_download_protocol_version;
+	WORD 	i2c_protocol_version;
+	WORD 	ee_data_version;
+}EE_VERSION;
+
+//28 bytes
+typedef struct ee_kernel_fs
+{
+	DWORD 	kernel_start_addr;
+	DWORD 	rootfs_start_addr;
+	DWORD 	kernel_version;
+	DWORD 	rootfs_version;
+	DWORD 	kernel_length;
+	DWORD 	kernel_checksum;
+	WORD 	rootfs_ok;
+	WORD 	disp_logo;
+
+}EE_KERNEL_FS;
+
+
+#define START_OF_VERSION_INFO 0
+typedef struct
+{
+unsigned char mac_addr[6];
+unsigned short default_port;
+unsigned int default_ip;
+unsigned int default_gateway;
+unsigned int default_mask;
+unsigned int system_ip;
+unsigned int system_gateway;
+unsigned int system_mask;
+unsigned short gui_comm_port;
+unsigned short servo_port;
+}EE_COMM_INFO;
+#define START_OF_COMM_INFO 0X90
+
+
+//	unsigned char ethtestpkt[2000]={
+//	    0xff,0xff,0xff,0xff,0xff,0xff,
+//	    0x66,0x55,0x44,0x33,0x22,0x10,
+//	    0x08,0x06,
+//	    0x06,0x00,0x01
+//	    };
+
+
+//	*******************************************************************
+//	*******************************************************************
+//	*******************************************************************
+//	*******************************************************************
+//	*******************************************************************
+//	*******************************************************************
+//
+//  移植  evdownload 协议
+//
+int	cmd_wait_status;						//通讯方式选择:串口或者网络或usb
+extern int usb_connected;
+unsigned short	TftpPort;				//两个端口是一样的,后面看看是否可以省略到一个
+unsigned long	HostIP=0;					//192.168.100.108
+unsigned int	ClientIP=0;
+unsigned short  ClientPort=0;	
+static short	ipID=0;
+unsigned char	ClientEther[6] ={0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+unsigned char	HostEther[6]={0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+static BYTE 	*DDR_buffer;
+static DWORD	erase_start, erase_end;
+static DWORD 	checksum2;
+static BYTE 	erase_obj;
+static DWORD 	proccess_bar=0;
+short	Protocol =NOPROTOCOL;
+//0--没有收到有效数据
+//1--一整包数据收全
+//2--接收数据状态
+int recv_status;
+int recv_buf_len;
+int	recv_index;
 
 
 
@@ -921,7 +1025,7 @@ void video_get_info_str (int line_number, char *info)
 	unsigned char hw_version = 116;
 	unsigned char product_id = 169;
 	unsigned char sw_version = 200;
-	unsigned char build_num  = 199;
+	//unsigned char build_num  = 199;
 
 	if (line_number == 1)
 		//strcpy (info, " Board: IPEK01");
@@ -1044,35 +1148,44 @@ int board_early_init_f(void)
 //	获取拨码开光状态
 //	
 //////////////////////////////////////////////////////////////////////////////////
+#define BOOTUP_MODE0 IMX_GPIO_NR(3, 26)
+#define BOOTUP_MODE1 IMX_GPIO_NR(3, 27)
+
+iomux_v3_cfg_t const bootup_mode_pads[] = {
+	(MX6_PAD_EIM_D26__GPIO3_IO26 | MUX_PAD_CTRL(NO_PAD_CTRL)),
+	(MX6_PAD_EIM_D27__GPIO3_IO27 | MUX_PAD_CTRL(NO_PAD_CTRL)),
+};
+
+
 static SWITCHSTATE GetDIPSwitchState(void)
 {
 
     SWITCHSTATE ret;
 	unsigned char DIPSwitchState;
-/*
-    *(volatile unsigned long *)MFP_54 = 0x40;
-    *(volatile unsigned long *)MFP_55 = 0x40;
-    GPDR1 &= ~(GPIO_bit(22)|GPIO_bit(23));  // input
-    
-    dummy_delay(0x10000);             // 延时10毫秒等待输入稳定
-    DIPSwitchState = ((GPLR1&(GPIO_bit(22)|GPIO_bit(23)))>>22);
-*/
-	DIPSwitchState = 2;
+	
+	/* Check bootup mode. */
+	imx_iomux_v3_setup_multiple_pads(bootup_mode_pads,
+					 ARRAY_SIZE(bootup_mode_pads));
+    gpio_direction_input(BOOTUP_MODE0);
+	gpio_direction_input(BOOTUP_MODE1);
+	mdelay(10);             // 延时10毫秒等待输入稳定
+	DIPSwitchState = (unsigned char)(gpio_get_value(BOOTUP_MODE0) | (gpio_get_value(BOOTUP_MODE1)<<1));
+	
     switch(DIPSwitchState) {
 
-        case 0:
+        case 3:
             ret = Setup;
         break;
 
-        case 1:
+        case 2:
             ret = TouchCalibrate;
         break;
 
-        case 2:
+        case 1:
             ret = DownLoadMode;
         break;
 
-        case 3:
+        case 0:
             ret = NormalBootLinux;
         break;
 
@@ -1378,6 +1491,405 @@ static void kinco_display_ee(void)
 #endif
 
 
+void have_eth(void)
+{
+	switch(lcd_type){
+		case 130:
+		case 131:
+		case 132:
+		case 133:
+		case 134:
+		case 135:
+		case 136:
+		case 137:
+		case 138:
+		case 139:
+		case 140:
+		case 141:
+		case 142:
+		case 143:
+		case 144:
+			eth_exist = 0;		
+			break;
+		case 146:
+		case 151:
+		case 152:
+		case 153:
+		case 154:
+		case 155:
+		case 156:
+		case 157:
+		case 158:
+		case 159:
+		case 160:
+		case 161:
+		case 162:
+		case 163:
+		case 164:
+		case 165:
+		case 166:
+			eth_exist =1;
+			break;
+		default:
+			eth_exist = 0;
+			break;
+	}
+}
+
+
+UINT16_T *wmemset (UINT16_T *s,UINT16_T c, size_t n)
+{
+  UINT16_T *wp = s;
+
+  while (n >= 4)
+    {
+      wp[0] = c;
+      wp[1] = c;
+      wp[2] = c;
+      wp[3] = c;
+      wp += 4;
+      n -= 4;
+    }
+
+  if (n > 0)
+    {
+      wp[0] = c;
+
+      if (n > 1)
+	{
+	  wp[1] = c;
+
+	  if (n > 2)
+	    wp[2] = c;
+	}
+    }
+
+  return s;
+}
+
+
+/************************************************************************************************
+* Function Name  : DRAW_memset16
+* Input          : unsigned short *p    ---->    指针，可不4字节对齐
+*                : unsigned short Fill  ---->    RGB编码的颜色值
+*                : NumWords  ---->    必须大于0
+* Output         : None
+* Description    : None
+************************************************************************************************/
+void DRAW_memset16(unsigned short * p, unsigned short Fill, int NumWords)
+{
+#if 0
+    unsigned long pattern, *pl;
+    unsigned short *ps;
+
+
+    if(NumWords<=0)
+        return;
+        
+//	    while (NumWords--) {
+//	             *(p++) = Fill;
+//	          }
+
+    if ((unsigned long)p & 0x02)
+        {
+            ps = p;
+            *ps++ = Fill;
+            NumWords--;
+            p = ps;
+        }
+    
+    pl = (unsigned long *)p;
+    pattern = ((((unsigned long)Fill) << 16) | Fill);
+    
+    while (NumWords > 1)
+        {
+            *pl++ = pattern;
+            NumWords -= 2;
+        }
+    
+    if (NumWords > 0)
+        {
+            *(unsigned short *)pl = Fill;
+        }
+#else
+	wmemset(p,Fill,NumWords);
+#endif
+}
+
+/************************************************************************************************
+* Function Name  : DRAW_SetPixel
+* Input          : x,y    绝对值坐标
+*                : color  颜色值
+* Output         : None
+* Description    : None
+************************************************************************************************/
+void DRAW_SetPixel(int x, int y, int color)
+{
+     Frm_Buf[y*current_lcd_xsize +x] =color;
+     //Frm_Buf[x*current_lcd_ysize +y] =color;
+}
+void DRAW_SetPixel_xnor(int x, int y, int color)
+{
+     Frm_Buf[y*current_lcd_xsize +x] ^=color;
+     //Frm_Buf[x*current_lcd_ysize +y] =color;
+}
+
+/************************************************************************************************
+* Function Name  : DRAW_HLine
+* Input          : x0,y 起始点坐标
+*                : x1  结束点的x坐标
+*                : color 颜色值
+* Output         : None
+* Description    : 画横线，可以用memset16优化写速度
+************************************************************************************************/
+void DRAW_HLine(int x0, int x1, int y, int color)
+{
+    int     i;
+    int        xstart, xend;
+    
+    if (x0 <0 ||x1 <0 ||y <0
+        ||x0 >=current_lcd_xsize ||x1 >=current_lcd_xsize 
+        ||y >=current_lcd_ysize)        return;
+    if (x0 >x1)
+    {
+        xstart    =x1;
+        xend    =x0;
+    }
+    else
+    {
+        xstart    =x0;
+        xend    =x1;
+    }
+    
+//	    for (i=xstart;i<=xend;i++)
+//	        DRAW_SetPixel(i, y, color);
+	//memset16优化写速度
+    	 wmemset(&Frm_Buf[y*current_lcd_xsize +xstart],(UINT16_T)color,xend-xstart);
+}
+
+/************************************************************************************************
+* Function Name  : DRAW_VLine
+* Input          : x,y0 起始点坐标
+*                : y1  结束点的y坐标
+*                : color 颜色值
+* Output         : None
+* Description    : 画竖线
+************************************************************************************************/
+void DRAW_VLine(int y0, int y1, int x, int color)
+{
+    int i;
+    int ystart, yend;
+    
+    
+    if (y0 <0 ||y1 <0 ||x <0
+        ||y0 >=current_lcd_ysize ||y1 >=current_lcd_ysize 
+        ||x >=current_lcd_xsize)        return;
+
+    if (y0 >y1)
+    {
+        ystart     =y1;
+        yend    =y0;
+    }
+    else
+    {
+        ystart    =y0;
+        yend    =y1;
+    }
+    
+    for (i=ystart;i<=yend;i++)
+        DRAW_SetPixel(x, i, color);
+}
+
+/************************************************************************************************
+* Function Name  : DRAW_Rect
+* Input          : x0,y0 起始点坐标
+*                : x1,y1 结束点坐标
+*                : color 颜色值
+* Output         : None
+* Description    : 画边框
+************************************************************************************************/
+void DRAW_Rect(int x0, int y0, int x1, int y1, int color)
+{
+    DRAW_HLine(x0, x1, y0, color);
+    DRAW_HLine(x0, x1, y1, color);
+    DRAW_VLine(y0, y1, x0, color);
+    DRAW_VLine(y0, y1, x1, color);
+}
+
+/************************************************************************************************
+* Function Name  : DRAW_FillRect
+* Input          : x0,y0 起始点坐标
+*                : x1,y1 结束点坐标
+*                : color 颜色值
+* Output         : None
+* Description    : 画边框，并且填充颜色
+************************************************************************************************/
+void DRAW_FillRect(int x0,int y0, int x1, int y1, int color)
+{
+    int i;
+    int ystart, yend;
+    
+//	    if (y0 >y1)
+//	    {
+//	        ystart        =y1;
+//	        yend        =y0;
+//	    }
+//	    else
+//	    {
+//	        ystart        =y0;
+//	        yend        =y1;
+//	    }
+    ystart = MIN(y0, y1);
+    yend = MAX(y0, y1);
+    for (i=ystart;i<=yend;i++)
+        DRAW_HLine(x0, x1, i, color);
+}
+
+/************************************************************************************************
+* Function Name  : DRAW_ClrScreen
+* Input          : color 颜色值
+* Output         : None
+* Description    : 清屏
+************************************************************************************************/
+void DRAW_ClrScreen(int color)
+{
+    DRAW_memset16(Frm_Buf,color,current_lcd_xsize*current_lcd_ysize);
+}
+
+/************************************************************************************************
+* Function Name  : DRAW_ByteTextOut
+* Input          : fontCode    ---->  显示的字符
+*                : xpos,ypos   ---->  起始点坐标
+*                : fgcolor     ---->  画笔颜色
+*                : bkcolor     ---->  背景颜色
+* Output         : None
+* Description    : 写字符到LCD，描点
+************************************************************************************************/
+void DRAW_ByteTextOut(const BYTE* fontCode, int xpos, int ypos, int fgcolor, int bkcolor)
+{
+    int i, j;
+    BYTE ch;
+    
+
+    if (xpos <0 ||xpos >=current_lcd_xsize)        return ;
+    if (ypos <0 ||ypos >=current_lcd_ysize)        return ;
+
+    for (j=0;j<8;j++)
+    {
+        ch = fontCode[j];
+        for (i=0;i<8;i++)
+        {
+            if ((ch >>i) &0x01)
+                DRAW_SetPixel(xpos+(7-i), ypos+j, fgcolor);
+            else
+                DRAW_SetPixel(xpos+(7-i), ypos+j, bkcolor);
+        }
+    }
+}
+
+/************************************************************************************************
+* Function Name  : DRAW_TextOnScreen
+* Input          : x,y         ---->  起始点坐标
+*                : font        ---->  显示的字符
+* Output         : None
+* Description    : 写字符到LCD，描点
+************************************************************************************************/
+extern const unsigned char nAsciiDot[];
+void DRAW_TextOnScreen(int x, int y, char * font)
+{
+    int        xpos, ypos;
+    char*    p =font;
+    
+    DEBUG_INFO("%s\r\n",font);	//fujie
+    if (x <0 ||x >=current_lcd_xsize)        return ;
+    if (y <0 ||y >=current_lcd_ysize)        return ;
+
+    ypos =y;    xpos =x;
+    while (*p)
+    {
+        if (xpos >current_lcd_xsize)
+        {
+            xpos =0;
+            ypos +=FONTHEIGHT;
+        }
+
+        DRAW_ByteTextOut(nAsciiDot +8*(*p -ASCII_OFFSET), xpos, ypos, BLACK, WHITE);
+        xpos +=FONTWIDTH;
+
+        p ++;
+    }
+}
+
+/************************************************************************************************
+* Function Name  : DRAW_DisplayWords
+* Input          : x           ---->  起始点X坐标
+*                : y           ---->  起始字符的行号，0,1,2,3....
+*                : font        ---->  显示的字符
+*                : value       ---->  RGB颜色
+* Output         : None
+* Description    : 写字符串到LCD，字体为fixedsys 8*8
+************************************************************************************************/
+void DRAW_DisplayWords(short x, short y, char *words, unsigned short value)
+{
+    int        xpos, ypos;
+    char*    p =words;
+    
+    DEBUG_INFO("%s\r\n",words);	//fujie
+
+    if (x <0 ||x >=current_lcd_xsize)        return ;
+    if (y <0 ||y >=current_lcd_ysize)        return ;
+
+    ypos =(y*(FONTHEIGHT+4));    xpos =x;
+    
+    while (*p)
+    {
+        DRAW_ByteTextOut(nAsciiDot +8*(*p -ASCII_OFFSET), xpos, ypos, value, WHITE);
+
+        xpos += FONTWIDTH;
+        if (xpos >current_lcd_xsize)
+        {
+            xpos =0;
+            ypos +=FONTHEIGHT;
+        }
+
+        p ++;
+    }
+
+	//flush_cache(video_fb_address, current_lcd_xsize*current_lcd_ysize*2);
+}
+
+/************************************************************************************************
+* Function Name  : DRAW_LibInit
+* Input          : None
+* Output         : None
+* Description    : 初始化drawlib，获取lcd的分辨率大小信息
+************************************************************************************************/
+void  DRAW_LibInit(void)
+{
+//songjm add for temp
+#if 0
+
+	lcd_type = 142;
+	current_lcd_xsize = 1024;
+	current_lcd_ysize = 600;
+	ee_write(&lcd_type, LCD_TYPE ,1);
+	ee_write((unsigned char *)&current_lcd_xsize , LCD_X_SIZE ,2);
+	ee_write((unsigned char *)&current_lcd_ysize , LCD_Y_SIZE ,2);
+	lcd_type = 142;
+	ee_write(&lcd_type, MANU_TYPE ,1);
+	save_ee();
+	lcd_type = 142;
+#endif
+//add end
+	
+	memcpy((unsigned char *)&current_lcd_xsize, eeprom_buff+LCD_X_SIZE, 2);
+	memcpy((unsigned char *)&current_lcd_ysize, eeprom_buff+LCD_Y_SIZE, 2);
+	//wmemset(Frm_Buf,0xffff,current_lcd_xsize*current_lcd_ysize);
+	DEBUG_INFO("current_lcd_xsize=%d\r\n",current_lcd_xsize);
+	DEBUG_INFO("current_lcd_ysize=%d\r\n",current_lcd_ysize);
+}
+
+
 #ifdef CONFIG_MISC_INIT_R
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1391,7 +1903,9 @@ int misc_init_r (void)
 {
 	char *env;
 	
-	DEBUG_INFO("misc_init_r\r\n");
+	DEBUG_INFO("+misc_init_r\r\n");
+
+	Frm_Buf = (unsigned short *)video_fb_address;    // 0x4ef3f220~0x4f0bf220,1024*768*2
 #if 0
 #if defined(__ET070__)
 	load_ee();	//load EE from NAND, save to EE_PY_BASE
@@ -1408,7 +1922,7 @@ int misc_init_r (void)
 	hardware_version=110;
 	printf("hardware_version=%d\r\n",hardware_version);
 	memcpy((unsigned char *)&show_logo, eeprom_buff+LOGO_DISP, 2);
-	//have_eth();
+	have_eth();
 	
 #if !defined(__ET070__) && !defined(__MT4523V__)
 	if(bootsel==DownLoadMode)   // 如果是download模式则不显示logo  0--显示  1--不显示
@@ -1429,6 +1943,7 @@ int misc_init_r (void)
 	//  lcd init 
 	//LCD_init();
 #endif
+	DRAW_LibInit();
 
 #if !defined (__ET070__)
 	//  初始化PWM3 --- 150KHz ，给CPLD做通信方式切换的Clock
@@ -1504,13 +2019,89 @@ int misc_init_r (void)
 
 #endif
 
+void BOOT_linux(void)
+{
+    //int count=0;
+    char tmpstring[40]={0};
+    DEBUG_INFO("+%s\r\n",__func__);
+
+    sprintf(tmpstring,"%s",CONFIG_BOOTCOMMAND);
+    //run_command("bootz 0x00500000",0);
+    run_command(tmpstring,0);
+	DEBUG_INFO("-%s\r\n",__func__);
+
+}
+
+
 int do_evdown (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 {
 	DEBUG_INFO("+eviewdownload main\r\n");
 
+	EE_VERSION version_info;
+	EE_COMM_INFO ip_info;
+	char tempstring[40];
+	//char hmi_type[16];
+	int i=0;
+	unsigned short mac=0;
+	char ethaddstring[20]={0};   
+	//int ret_len;
+	unsigned int cnt = 0;
+	unsigned int cpu_led_toggle_timeout=0;
+	BYTE	eth_rxbuff[1024]={0};
+	BYTE	usb_rxbuff[1024]={0};
+	BYTE    serial_rxbuff[1024]={0};
+	int usb_rcvsize=0;
+	int eth_rcvsize=0;
+
+	memcpy((unsigned char *)&ip_info, eeprom_buff+START_OF_COMM_INFO, sizeof(ip_info));
+	memcpy((unsigned char *)&version_info, eeprom_buff+START_OF_VERSION_INFO, sizeof(version_info));
+	// read mac address from ee
+	for (i=0; i<3; i++){
+		memcpy((unsigned char *)&mac, eeprom_buff+(MAC_ADDR +i*2), 2);
+		ClientEther[2*i] 		=mac;
+		ClientEther[(2*i) +1] =(mac >>8);
+	}
+	sprintf(ethaddstring,"%02x:%02x:%02x:%02x:%02x:%02x",
+					ClientEther[0],ClientEther[1],ClientEther[2],
+					ClientEther[3],ClientEther[4],ClientEther[5]);	
+	memcpy(ip_info.mac_addr,ClientEther,6);
+	setenv("ethaddr",ethaddstring);
+	// read ip address from ee
+	memcpy((unsigned char *)&ClientIP, eeprom_buff+WORK_IP, 4);
+	memcpy((unsigned char *)&ClientPort, eeprom_buff+WORK_PORT, 2);
+	
+	// build number is is automatically generated by gen_build_num.sh
+	//build_num = 895;	//don't need this ,fujie mdy
+	
+    /*  LCD上显示配置信息  */
+	DRAW_ClrScreen(WHITE);
+
+	flush_cache(video_fb_address, current_lcd_xsize*current_lcd_ysize*2);
 
 
+	memcpy((unsigned char *)&version_info, eeprom_buff+START_OF_VERSION_INFO, sizeof(version_info));
+	memcpy((unsigned char *)&ip_info, eeprom_buff+START_OF_COMM_INFO, sizeof(ip_info));
+	
+	sprintf(tempstring,"Hardware Version %d.%02d.%d",(version_info.hw_version)/100,(version_info.hw_version)%100,version_info.product_id);
+	DRAW_DisplayWords(2,1,tempstring,BLACK);
 
+	sprintf(tempstring,"Bootloader Version %d.%02d Build %d", SoftwareVersion/100, SoftwareVersion%100,build_num);
+	//sprintf(tempstring,"Bootloader Version %d.%02d Build 945", SoftwareVersion/100, SoftwareVersion%100);
+	DRAW_DisplayWords(2,2,tempstring,BLACK);
+
+	if(eth_exist){
+		sprintf(tempstring,"Mac address:   %02x:%02x:%02x:%02x:%02x:%02x",ip_info.mac_addr[0],ip_info.mac_addr[1],ip_info.mac_addr[2],ip_info.mac_addr[3],ip_info.mac_addr[4],ip_info.mac_addr[5]);	
+		DRAW_DisplayWords(2,4,tempstring,BLACK);
+		sprintf(tempstring,"IP address:    %d.%d.%d.%d",(ClientIP)&0xff,(ClientIP/0x100)&0xff,(ClientIP/0x10000)&0xff,(ClientIP/0x1000000)&0xff);
+		DRAW_DisplayWords(2,5,tempstring,BLACK);
+		sprintf(tempstring,"Download Port: %d",ip_info.servo_port);
+		DRAW_DisplayWords(2,6,tempstring,BLACK);
+	}
+	
+	DRAW_DisplayWords(2,9,"Firmware update mode",RED);
+	
+	flush_cache(video_fb_address, current_lcd_xsize*current_lcd_ysize*2);
+	DEBUG_INFO("framebuffer addr:0x%08x\r\n",video_fb_address);
 	DEBUG_INFO("-eviewdownload main\r\n");
 	return 0;
 }
@@ -1521,6 +2112,70 @@ U_BOOT_CMD(
 	"evdown  - Download kernel and rootfs through eview USB\\Ether\\Serial.\n",
 	""
 );
+
+int do_evboot (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
+{
+	DEBUG_INFO("+do_evboot main\r\n");
+	BOOT_linux();
+#if 0
+    *(volatile unsigned long *)0xD401E200 = 0x42;  // PRI_TDO 作为 BT_TXD //只有正常启动时
+    	KincoLcd_showlogo();
+		int sign=0,addr1=255;
+		
+		ee_read((unsigned char*)&sign,addr1,1);
+		if(sign>0)
+			{
+			  printf("sign@@@@@@==%d!!!!\r\n",sign);
+		sign=0;
+		ee_write((unsigned char *)&sign, addr1,1);	
+		save_ee();
+
+			BOOT_linux();
+			
+		
+    
+}
+		else
+		
+		{printf("signn~~~~==%d!!!!\r\n",sign);
+		sign=1;
+				ee_write((unsigned char *)&sign, addr1,1);
+				save_ee();
+				mdelay(2000); 
+				run_command("evdown",0);
+			}
+
+    if(TRUE == BOOT_CopyKernel()) {
+#if defined(__MT4523V__) || defined(__ET070__)//added by James to distinguish between MT and ET!
+//songjm add
+		if(!get_matrix())
+		{
+			bootlinux = 1;
+			enter_boot_menu(1);
+		}
+		else
+#endif			
+			BOOT_linux();
+    }else{
+        mdelay(2000); 
+        run_command("evdown",0);
+    }
+	
+    printf("WARNING: should never return here, kernel return!!!!!\r\n");
+    while(1); // should never return here
+#endif
+    return 0;
+}
+
+
+
+
+U_BOOT_CMD(
+	evboot,	CONFIG_SYS_MAXARGS,	1,	do_evboot,
+	"evboot  - boot linux\n",
+	""
+);
+
 
 
 

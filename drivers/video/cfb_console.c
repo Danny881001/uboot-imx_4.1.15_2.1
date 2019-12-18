@@ -314,7 +314,8 @@ DECLARE_GLOBAL_DATA_PTR;
 /* Locals */
 static GraphicDevice *pGD;	/* Pointer to Graphic array */
 
-static void *video_fb_address;	/* frame buffer address */
+//static void *video_fb_address;	/* frame buffer address */
+void *video_fb_address;	/* frame buffer address */
 static void *video_console_address;	/* console buffer start address */
 
 static int video_logo_height = VIDEO_LOGO_HEIGHT;
@@ -644,6 +645,7 @@ static void memsetl(int *p, int c, int v)
 {
 	while (c--)
 		*(p++) = v;
+	debug("framebuffer last address:0x%08x,len=0x%08x\n",p,(VIDEO_VISIBLE_ROWS * VIDEO_LINE_LEN) / sizeof(int));
 }
 #endif
 
@@ -2177,6 +2179,7 @@ static int video_init(void)
 	eorx = fgx ^ bgx;
 
 	video_clear();
+	debug("fgx=0x%08x,bgx=0x%08x\n",fgx,bgx);
 
 #ifdef CONFIG_VIDEO_LOGO
 	/* Plot the logo and get start point of console */
