@@ -140,7 +140,7 @@
 	"fdt_file=undefined\0" \
 	"fdt_addr=0x18000000\0" \
 	"boot_fdt=try\0" \
-	"ipaddr=192.168.210.245\0" \
+	"ipaddr=192.168.210.75\0" \
 	"ethaddr=08:00:3e:26:0a:5b\0" \
 	"serverip=192.168.210.11\0" \
 	"netmask=255.255.255.0\0" \

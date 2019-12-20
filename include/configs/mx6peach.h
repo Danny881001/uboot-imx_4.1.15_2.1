@@ -9,7 +9,7 @@
 #ifndef __MX6QSABRESD_CONFIG_H
 #define __MX6QSABRESD_CONFIG_H
 
-#define DEBUG
+/*#define DEBUG*/
 #define DEBUG_MODE
 
 #if defined (DEBUG_MODE)	/*fujie add*/

@@ -935,6 +935,26 @@ struct display_info_t const displays[] = {{
 		.sync           = 0,
 		.vmode          = FB_VMODE_NONINTERLACED
 } }, {
+	.bus	= -1,
+	.addr	= 0,
+	.pixfmt = IPU_PIX_FMT_RGB24,
+	.detect = NULL,
+	.enable = do_enable_hdmi,
+	.mode	= {
+		.name			= "1920X1080-60",
+		.refresh		= 60,
+		.xres			= 1920,
+		.yres			= 1080,
+		.pixclock		= 6734,
+		.left_margin	= 148,
+		.right_margin	= 88,
+		.upper_margin	= 36,
+		.lower_margin	= 4,
+		.hsync_len		= 44,
+		.vsync_len		= 5,
+		.sync			= 0,
+		.vmode			= FB_VMODE_NONINTERLACED
+} }, {
 	.bus	= 0,
 	.addr	= 0,
 	.pixfmt	= IPU_PIX_FMT_RGB24,
@@ -1884,6 +1904,8 @@ void  DRAW_LibInit(void)
 	
 	memcpy((unsigned char *)&current_lcd_xsize, eeprom_buff+LCD_X_SIZE, 2);
 	memcpy((unsigned char *)&current_lcd_ysize, eeprom_buff+LCD_Y_SIZE, 2);
+	current_lcd_xsize = 1920;
+	current_lcd_ysize = 1080;
 	//wmemset(Frm_Buf,0xffff,current_lcd_xsize*current_lcd_ysize);
 	DEBUG_INFO("current_lcd_xsize=%d\r\n",current_lcd_xsize);
 	DEBUG_INFO("current_lcd_ysize=%d\r\n",current_lcd_ysize);
