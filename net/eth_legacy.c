@@ -350,7 +350,7 @@ int eth_init(void)
 
 	old_current = eth_current;
 	do {
-		debug("Trying %s\n", eth_current->name);
+		printf("Trying %s\n", eth_current->name);
 
 		if (eth_current->init(eth_current, gd->bd) >= 0) {
 			eth_current->state = ETH_STATE_ACTIVE;
@@ -395,6 +395,59 @@ int eth_rx(void)
 
 	return eth_current->recv(eth_current);
 }
+
+//**********************************************************************/
+//**********************************************************************/
+//**********************************************************************/
+//**********************************************************************/
+/**********************************************************************/
+//
+//   sundj   增加3个接口函数
+//
+int mt4620_eth_init(void)
+{
+	printf("init %s\n", eth_current->name);
+	eth_init();
+	printf("init %s\n", eth_current->name);
+#if 0
+	bd_t *bd = gd->bd;
+
+	eth_halt();
+#ifdef CONFIG_NET_MULTI
+	eth_set_current();
+#endif
+	if (eth_init(bd) < 0) {
+		eth_halt();
+		return(-1);
+	}
+#endif
+    return 0;
+}
+
+int mt4620_eth_send(volatile void *packet, int length)
+{
+    eth_send(packet,length);
+    return 0;
+}
+unsigned char mt4620_eth_pktbuf[2000];
+extern int RxPacketHandle(char *rxPktBuf, int len);
+int mt4620_eth_rcv(volatile void *packet)
+{
+    int ret_len=0;
+    ret_len = eth_rx();
+    if(ret_len > 0) {
+        memcpy((char *)packet,(char *)mt4620_eth_pktbuf,
+                    (ret_len>sizeof(mt4620_eth_pktbuf))?sizeof(mt4620_eth_pktbuf):ret_len);
+        ret_len = RxPacketHandle((char *)packet,ret_len);
+		if(ret_len > 0)
+			printf("ret_len:	%d\n", ret_len);
+    }
+    if(ret_len>0)
+        return ret_len;
+    else
+        return 0;
+}
+
 
 #ifdef CONFIG_API
 static void eth_save_packet(void *packet, int length)

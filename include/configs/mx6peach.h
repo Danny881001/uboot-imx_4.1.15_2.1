@@ -199,11 +199,37 @@
 #define	DARKGRAY	RGB888(90, 90, 90)
 #endif
 
+/***************************************************************
+//    evdownload 协议
+****************************************************************/
+#define WAIT 								0
+#define NET   								1
+#define SERIAL 								2
+#define USB 								3
+
+#define SWAP8(A)		(A)
+#define SWAP16(A)		((((A)&0x00ff)<<8) | ((A)>>8))
+#define SWAP32(A)		((((A)&0x000000ff)<<24) | (((A)&0x0000ff00)<<8) | (((A)&0x00ff0000)>>8) | (((A)&0xff000000)>>24))
+
 
 #define NOPROTOCOL				0
 #define PROT_BOOTP				68
 #define PROT_TFTP				69
 #define PROT_EVIEW				14
+
+#define IAP_PROTOCOL_START_FLAG_A 		0x5a  	//IAP起始标志A
+#define IAP_PROTOCOL_START_FLAG_B 		0xa5  	//IAP起始标志B
+#define STATUS_START_FLAG_A 				0      	//标志A 
+#define STATUS_START_FLAG_B 				1      	//标志B
+#define STATUS_BUFSIZE_HIGH 				2    	//缓冲区长度 ，高8位
+#define STATUS_BUFSIZE_LOW  				3 		//缓冲区长度 ，低8位
+#define STATUS_COMMAND 					4		//命令字
+#define STATUS_DATA 						8		//数据区
+#define STATUS_CHECKSUM 					9		//校验和
+#define STATUS_END 						0x0a	//数据接收完成	
+#define STATUS_END_OK 						0x0b	//成功结束
+#define STATUS_END_FAIL 					0x0c	//失败结束
+
 
 
 #endif                         /* __MX6QSABRESD_CONFIG_H */

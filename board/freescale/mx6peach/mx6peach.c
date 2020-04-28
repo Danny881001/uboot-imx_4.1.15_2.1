@@ -46,6 +46,7 @@
 
 #include <command.h>
 #include <pwm.h>
+#include <net.h>
 #include "res.h"
 
 #define build_num 100
@@ -60,6 +61,54 @@ typedef volatile unsigned long  VUINT32_T;
 typedef unsigned char           UINT8,UINT8_T,BYTE,BOOL;
 typedef unsigned short          UINT16,UINT16_T,WORD;
 //typedef unsigned short          wchar_t;
+
+// Address Resolution Protocol (ARP) header.
+typedef struct {
+	unsigned short	ar_hrd;		// Format of hardware address.
+	unsigned short	ar_pro;		// Format of protocol address.
+	unsigned char	ar_hln;		// Length of hardware address.
+	unsigned char	ar_pln;		// Length of protocol address.
+	unsigned short	ar_op;		// Operation.
+//	unsigned char	ar_data;
+} __attribute__ ((packed))  ARP_HEADER;
+
+// IP Header.
+typedef struct {
+	unsigned char	ip_hl_v;	// version and header length
+	unsigned char	ip_tos;		// type of service.
+	unsigned short	ip_len;		// total length 
+	unsigned short	ip_id;		// identification.
+	unsigned short	ip_off;		// fragment offset field.
+	unsigned char	ip_ttl;		// time to live
+	unsigned char	ip_p;		// protocol (UDP:17).
+	unsigned short	ip_chksum;	// checksum.
+	unsigned long	ip_src;		// source ip address.
+	unsigned long	ip_dest;	// destination ip address.
+} __attribute__ ((packed))  IP_HEADER;
+
+// udp header.
+typedef struct 
+{
+	unsigned short	udp_src;	// udp source port.
+	unsigned short	udp_dest;	// udp destination port.
+	unsigned short	udp_len;	// length of udp packet.
+	unsigned short	udp_chksum; // checksum.
+} __attribute__ ((packed))  UDP_HEADER ;
+
+typedef struct {
+	unsigned char		et_dest[6];	// Destination Mac Address.
+	unsigned char		et_src[6];		// Source Mac Address.
+	unsigned short		et_protlen;	// if ethernet header protocol, else length.
+	unsigned char		et_dsap;		// DSAP.
+	unsigned char		et_ssap;		// SSAP.
+	unsigned char		et_ctl;			// contorl.
+	unsigned char		et_snap1;		// SNAP.
+	unsigned char		et_snap2;
+	unsigned char		et_snap3;
+	unsigned short		et_prot;		// protocol.
+} __attribute__ ((packed))  ETH_HEADER;
+
+
 /*                              0    1    2    3    4    5    6    7    8    9    a    b    c    d    e    f    */
 UINT8_T eeprom_buff[EE_SIZE] = {0x92,0x00,0x73,0x00,0x6E,0x00,0x77,0x01,0x67,0x00,0x64,0x00,0x00,0x00,0x00,0x00,/*0*/
 								0x00,0x00,0x01,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,/*1*/
@@ -168,12 +217,7 @@ unsigned short servo_port;
 //	    };
 
 
-//	*******************************************************************
-//	*******************************************************************
-//	*******************************************************************
-//	*******************************************************************
-//	*******************************************************************
-//	*******************************************************************
+/*******************************************************************/
 //
 //  移植  evdownload 协议
 //
@@ -421,7 +465,7 @@ iomux_v3_cfg_t const di0_pads[] = {
 
 iomux_v3_cfg_t const backlight_pads[] = {
 	MX6_PAD_NANDF_RB0__GPIO6_IO10 | MUX_PAD_CTRL(NO_PAD_CTRL),	/*BACKLIGHT ENABLE*/
-	MX6_PAD_GPIO_9__PWM1_OUT | MUX_PAD_CTRL(NO_PAD_CTRL),		/*BACKLIGHT DIMMING*/
+	MX6_PAD_DISP0_DAT9__PWM2_OUT | MUX_PAD_CTRL(NO_PAD_CTRL),		/*BACKLIGHT DIMMING*/
 };
 
 
@@ -477,6 +521,39 @@ static iomux_v3_cfg_t const epdc_disable_pads[] = {
 	MX6_PAD_EIM_DA6__GPIO3_IO06,
 };
 #endif
+
+#define GPIO_CPU_LED IMX_GPIO_NR(1, 9)
+static iomux_v3_cfg_t const cpu_led_pads[] = {
+	MX6_PAD_GPIO_9__GPIO1_IO09 | MUX_PAD_CTRL(NO_PAD_CTRL),
+};
+
+static void setup_cpu_led(void)
+{
+	imx_iomux_v3_setup_multiple_pads(cpu_led_pads,
+					 ARRAY_SIZE(cpu_led_pads));
+	gpio_direction_output(GPIO_CPU_LED, 0);
+	gpio_set_value(GPIO_CPU_LED,1);
+}
+
+//
+//    GPIO_9 CPU_LED
+//
+static void toggle_cpu_led(void)
+{
+#if 0
+    //GPDR1 |= BIT(5);  
+    if(0 ==(GPLR1&BIT(5))){
+        GPSR1 |= BIT(5);
+    }else{
+        GPCR1 |= BIT(5);
+    }
+#endif
+	if(0 == gpio_get_value(GPIO_CPU_LED))
+		gpio_set_value(GPIO_CPU_LED,1);
+	else
+		gpio_set_value(GPIO_CPU_LED,0);
+}
+
 
 #ifdef CONFIG_FSL_ESDHC
 struct fsl_esdhc_cfg usdhc_cfg[3] = {
@@ -863,13 +940,13 @@ static void enable_backlight(void)
 	/* LCD power enable */
 	//gpio_direction_output(DISP0_PWR_EN, 1);
 
-	/* enable backlight PWM 1 */
-	if (pwm_init(0, 0, 0))
+	/* enable backlight PWM 2 */
+	if (pwm_init(1, 0, 0))
 		goto error;
 	/* duty cycle 500ns, period: 3000ns */
-	if (pwm_config(0, 50000, 300000))
+	if (pwm_config(1, 5000000, 30000000))
 		goto error;
-	if (pwm_enable(0))
+	if (pwm_enable(1))
 		goto error;
 	return;
 
@@ -1086,6 +1163,165 @@ int board_eth_init(bd_t *bis)
 	return cpu_eth_init(bis);
 }
 
+//0--ok, -1--err
+int RxPacketHandle(char *rxPktBuf, int len)
+{
+	ETH_HEADER		*et = (ETH_HEADER *)rxPktBuf;
+	IP_HEADER		*ip = (IP_HEADER *)(rxPktBuf+ETHER_HDR_SIZE);
+	UDP_HEADER		*udp = (UDP_HEADER *)(rxPktBuf+ETHER_HDR_SIZE+IP_HDR_SIZE_EV);
+	ARP_HEADER		*arp = (ARP_HEADER *)(rxPktBuf+ETHER_HDR_SIZE);
+	ushort			prot;
+    //int             i=0;
+
+    //ARP_HEADER arp_test;
+    //IP_HEADER ip_test;
+
+//	    printf("-------------------------------------------------------------------\r\n");
+//		printf("sizeof(struct arp_test) = %d\r\n",sizeof(arp_test));
+//		printf("sizeof(struct ip_test) = %d\r\n",sizeof(ip_test));
+
+	prot = SWAP16(et->et_protlen);
+	if(prot > 0)
+	    printf("%s: port=0x%04x,len=%d\r\n",__FUNCTION__,prot,len);
+//	    printf("%s: line %d\r\n",__FUNCTION__,__LINE__);
+//	    printf("char *rxPktBuf = 0x%x\r\n",(int)rxPktBuf);
+//	
+//	    printf("char *ip = 0x%x\r\n",(int)ip);
+//	    printf("char *udp = 0x%x\r\n",(int)udp);
+//	    printf("char *arp = 0x%x\r\n",(int)arp);
+//	
+
+	switch (prot)
+	{
+	case PROT_ARP:
+		if (len <ARP_HDR_SIZE) 						return -1;
+		
+		et =(ETH_HEADER *)rxPktBuf;
+		arp =(ARP_HEADER *)(rxPktBuf +ETHER_HDR_SIZE);
+		if (SWAP16(arp->ar_op) !=ARPOP_REQUEST) 	return -1;
+		if (SWAP16(arp->ar_hrd) !=ARP_ETHER) 		return -1;
+		if (SWAP16(arp->ar_pro) !=PROT_IP) 		return -1;
+		if (SWAP16(arp->ar_hln !=6)) 				return -1;
+		if (SWAP16(arp->ar_pln !=4)) 				return -1;
+//	        printf("**************************************************\r\n");
+//	        printf("Target ip addr=0x%x, ClientIP=0x%x\r\n",*((unsigned long *)rxPktBuf[38]),ClientIP);
+//	        if(0 != MemCpy((char *)rxPktBuf[38],(char *)&(ClientIP),4))  return -1;
+//	        printf("##################################################\r\n");
+
+		// ethernet header.
+		memcpy((char *)&rxPktBuf[0], (char *)et->et_src, 6);
+		memcpy((char *)&rxPktBuf[6], (char *)ClientEther, 6);
+		*(short *)(&rxPktBuf[12]) =SWAP16(PROT_ARP);
+		// ARP packet.
+		// hard type.
+		*(short *)(&rxPktBuf[14]) =SWAP16(0x0001);
+		// prot type.
+		*(short *)(&rxPktBuf[16]) =SWAP16(0x0800);
+		// hardware address size.
+		rxPktBuf[18]              =0x06;
+		// prot size.
+		rxPktBuf[19]              =0x04;
+		// op.
+		*(short *)(&rxPktBuf[20]) =SWAP16(ARPOP_REPLY);
+		// Sender Ethernet Address.
+		memcpy((char *)&(rxPktBuf[32]), (char *)&(rxPktBuf[22]), 6);
+		// Sender IP Address.
+		memcpy((char *)&(rxPktBuf[38]), (char *)&(rxPktBuf[28]), 4);
+		// Target Ethernet Address.
+		memcpy((char *)&(rxPktBuf[22]), (char *)ClientEther, 6);
+		// Target IP Address.
+		memcpy((char *)&(rxPktBuf[28]), (char *)&(ClientIP), 4);
+//	        printf("%d\r\n",__LINE__);
+//	        printf("PROT_ARP");
+//	        for(i=0;i<ETHER_HDR_SIZE +ARP_HDR_SIZE;i++)
+//	        {
+//	            if(0==(i%16))
+//	            {
+//	                printf("\r\n%04x: ",i);
+//	            }
+//	            printf("%02x ",rxPktBuf[i]);
+//	        }
+//	        printf("\r\n\r\n");
+		mt4620_eth_send((char *)rxPktBuf, ETHER_HDR_SIZE +ARP_HDR_SIZE);
+		return 0;
+	case PROT_IP:
+		if (len <ETHER_HDR_SIZE +IP_HDR_SIZE_EV +UDP_HDR_SIZE) 	return -1;	
+		if (len <ETHER_HDR_SIZE +SWAP16(ip->ip_len)) 			return -1;
+//	        for(i=0;i<ETHER_HDR_SIZE +ARP_HDR_SIZE;i++)
+//	        {
+//	            if(0==(i%16))
+//	            {
+//	                printf("\r\n%04x: ",i);
+//	            }
+//	            printf("%02x ",rxPktBuf[i]);
+//	        }
+//	        printf("\r\n\r\n");
+		ip =(IP_HEADER *)(rxPktBuf +ETHER_HDR_SIZE);
+		udp =(UDP_HEADER *)(rxPktBuf +ETHER_HDR_SIZE +IP_HDR_SIZE_EV);
+//	        printf("%d\r\n",__LINE__);
+		if ((ip->ip_hl_v & 0xf0) != 0x40) 						return -1;
+//	        printf("%d\r\n",__LINE__);
+		if (ip->ip_off & SWAP16(0x1fff)) 						return -1;
+//	        printf("%d\r\n",__LINE__);
+//	        printf("(char *)ip=0x%x,IP_HDR_SIZE_EV=%d\r\n",(int)ip,IP_HDR_SIZE_EV);
+//			if (!IPChksumOK((char *)ip, IP_HDR_SIZE_EV /2)) 			return -1;
+//			if (ClientIP && memcmp((char *)&ip->ip_dest, (char *)&ClientIP, 4)) 	return -1;
+//	        printf("%d\r\n",__LINE__);
+//	        printf("ip->ip_dest=0x%x,ClientIP=0x%x\r\n",ip->ip_dest,ClientIP);
+        if(ip->ip_dest != ClientIP)  return -1;
+//	        printf("%d\r\n",__LINE__);
+		if (ip->ip_p !=17) 										return -1;		//UDP protocol
+//	        printf("%d\r\n",__LINE__);
+
+//	        printf("Protocol=0x%04x\r\n",Protocol);
+		switch (Protocol)
+		{
+		case PROT_EVIEW:
+//	            printf("char *rxPktBuf = 0x%x\r\n",(int)rxPktBuf);
+//	            printf("char *ip = 0x%x\r\n",(int)ip);
+//	            printf("char *udp = 0x%x\r\n",(int)udp);
+//			    printf("Protocol...PROT_EVIEW: %d = %d\r\n",udp->udp_dest,SWAP16(ClientPort));
+			if (udp->udp_dest!= SWAP16(ClientPort))			return -1;
+			if ( ((BYTE *)(rxPktBuf +ETHER_HDR_SIZE +IP_HDR_SIZE_EV +UDP_HDR_SIZE))[0] !=0x5a 
+				||((BYTE *)(rxPktBuf +ETHER_HDR_SIZE +IP_HDR_SIZE_EV +UDP_HDR_SIZE))[1] !=0xa5 )
+			{
+//				    printf("0x5a 0xa5 miss\r\n");
+				return -1;
+			}
+			else 
+			{
+				//将客服端的端口号和mac地址保存起来,供回复使用
+				TftpPort = SWAP16(udp->udp_src);
+//					printf("TftpPort=%d\r\n",TftpPort);
+				memcpy((char *)HostEther, (char *)et->et_src, 6);
+//					printf("HostEther=%02x:%02x:%02x:%02x:%02x:%02x\r\n",
+//					                HostEther[0],
+//					                HostEther[1],
+//					                HostEther[2],
+//					                HostEther[3],
+//					                HostEther[4],
+//					                HostEther[5]
+//					                );
+				//if (HostIP ==0)
+				{
+					memcpy((char *)&(HostIP), (char *)&(rxPktBuf[28]), 4);
+					HostIP =(HostIP >>16) |(HostIP <<16);
+				}
+//					printf("HostIP=0x%x,len=%d\r\n",HostIP,len);
+				return len;
+			}
+			break;
+		default :
+			break;
+		}
+		break;
+	default:
+		break;
+	}
+	return -1;
+}
+
+
 #ifdef CONFIG_USB_EHCI_MX6
 #define USB_OTHERREGS_OFFSET	0x800
 #define UCTRL_PWR_POL		(1 << 9)
@@ -1243,6 +1479,8 @@ int board_init(void)
 #ifdef CONFIG_FEC_MXC
 	setup_fec();
 #endif
+
+	setup_cpu_led();
 
 	bootsel = GetDIPSwitchState(); 
     DEBUG_INFO("\n\nbootsel = %d\r\n",bootsel);
@@ -2053,7 +2291,6 @@ void BOOT_linux(void)
 
 }
 
-
 int do_evdown (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 {
 	DEBUG_INFO("+eviewdownload main\r\n");
@@ -2122,7 +2359,132 @@ int do_evdown (cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 	DRAW_DisplayWords(2,9,"Firmware update mode",RED);
 	
 	flush_cache(video_fb_address, current_lcd_xsize*current_lcd_ysize*2);
-	DEBUG_INFO("framebuffer addr:0x%08x\r\n",video_fb_address);
+	//DEBUG_INFO("framebuffer addr:0x%08x\r\n",video_fb_address);
+
+	//mt4620_usb_init();
+	//usbc_nEN(TRUE);  // 2010-8-24 增加使能控制    
+	if(eth_exist == 1){
+		mt4620_eth_init();
+	}
+	/**  变量初始化  **/
+	cnt = 0;
+	cpu_led_toggle_timeout = 0;
+	cmd_wait_status	= WAIT;
+	recv_status	 	=STATUS_START_FLAG_A;
+	Protocol 		=PROT_EVIEW;
+	memset(eth_rxbuff,0,sizeof(eth_rxbuff));
+	memset(usb_rxbuff,0,sizeof(usb_rxbuff));
+	memset(serial_rxbuff,0,sizeof(serial_rxbuff));
+	eth_rcvsize=0;
+	usb_rcvsize=0;
+
+	while(1)
+	{
+	
+			cnt = 0;
+	
+			if(cpu_led_toggle_timeout++>50) 	 // 闪烁cpu_led
+			{
+				cpu_led_toggle_timeout = 0;
+				toggle_cpu_led();
+				//printf("cpu_led status:%d\n",gpio_get_value(GPIO_CPU_LED));
+			}
+			/*
+			 *	Abort if ctrl-c was pressed.  仅供调试使用
+			 */
+			if (ctrlc()) {
+				puts ("\nAbort\n");
+				break;
+			}
+	
+			if (cmd_wait_status == WAIT)  {
+		
+				if (usb_connected) goto wait_cmd;
+		
+				while ( cnt < 100) {
+//						mt4620_usb_inthandle(); 	  // 执行时间约为 3-4 us
+					cnt ++;
+				}
+			}
+	wait_cmd:		
+			switch (cmd_wait_status)
+			{
+				case WAIT:
+				{
+					//监听网卡
+					if(eth_exist){
+						if ((eth_rcvsize = mt4620_eth_rcv((char *)eth_rxbuff)) > 0) {
+#if 1      			    
+								printf("recv data from enet:");
+								for(i=0;i<eth_rcvsize;i++)
+								{
+									if(0==(i%16))
+									{
+										printf("\r\n%04x: ",i);
+									}
+									printf("%02x ",eth_rxbuff[i]);
+								}
+								printf("\r\n\r\n");
+#endif
+								cmd_wait_status = NET;
+						}
+					}
+					//监听USB口
+//					if((usb_rcvsize = mt4620_usb_rx ((unsigned char*)usb_rxbuff, sizeof(usb_rxbuff))) != 0) {
+#if 0      			    
+	//						printf("USB收到数据");
+	//						for(i=0;i<usb_rcvsize;i++)
+	//						{
+	//							if(0==(i%16))
+	//							{
+	//								printf("\r\n%04x: ",i);
+	//							}
+	//							printf("%02x ",usb_rxbuff[i]);
+	//						}
+	//						printf("\r\n\r\n");
+#endif
+//						cmd_wait_status = USB;
+//						break;
+//					}
+					//监听串口
+//					if (EviewSerialRx(serial_rxbuff) != 0)			
+//						cmd_wait_status = SERIAL;	
+//					else break;
+				}
+#if 0
+			case SERIAL:
+			{
+				while ((EviewSerialRx(serial_rxbuff) != 1)){	   
+					//if (cnt++>0x10000) {							 
+					//	  break;
+				   // }
+				}
+				ProcessCmd(serial_rxbuff);
+				recv_status=STATUS_START_FLAG_A;
+				break;
+			}
+#endif
+			case NET:// 网卡下载处理
+			{
+				//ProcessCmd(eth_rxbuff);
+				//DEBUG_INFO("+ProcessCmd\r\n");
+				break;
+			}
+#if 0
+			case USB:// USB下载处理
+			{
+				ProcessCmd(usb_rxbuff);
+				break;
+			}
+#endif
+			default:break;
+			}
+#if defined (__ET070__)
+//			save_ee();
+#endif
+		}
+
+	
 	DEBUG_INFO("-eviewdownload main\r\n");
 	return 0;
 }

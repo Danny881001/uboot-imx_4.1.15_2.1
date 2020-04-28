@@ -373,6 +373,8 @@ struct ip_udp_hdr {
 #define IP_UDP_HDR_SIZE		(sizeof(struct ip_udp_hdr))
 #define UDP_HDR_SIZE		(IP_UDP_HDR_SIZE - IP_HDR_SIZE)
 
+//added by danny
+#define IP_HDR_SIZE_EV		20
 /*
  *	Address Resolution Protocol (ARP) header.
  */
