@@ -52,6 +52,7 @@ void mmu_set_region_dcache_behaviour(phys_addr_t start, size_t size,
 {
 	u32 *page_table = (u32 *)gd->arch.tlb_addr;
 	unsigned long upto, end;
+	phys_addr_t startpt,stoppt;
 
 	end = ALIGN(start + size, MMU_SECTION_SIZE) >> MMU_SECTION_SHIFT;
 	start = start >> MMU_SECTION_SHIFT;
@@ -59,7 +60,18 @@ void mmu_set_region_dcache_behaviour(phys_addr_t start, size_t size,
 	      option);
 	for (upto = start; upto < end; upto++)
 		set_section_dcache(upto, option);
-	mmu_page_table_flush((u32)&page_table[start], (u32)&page_table[end]);
+//	Changed by danny to solve warning----CACHE: Misaligned operation at range [87ff0000, 87ff0004]
+//	mmu_page_table_flush((u32)&page_table[start], (u32)&page_table[end]);
+	/*
+	 * Make sure range is cache line aligned 
+	 * Only CPU	maintains page tables, hence it is safe to always
+	 * flush complete cache lines...
+	 */
+	startpt = (phys_addr_t)&page_table[start];
+	startpt &= ~(CONFIG_SYS_CACHELINE_SIZE - 1);
+	stoppt = (phys_addr_t)&page_table[end];
+	stoppt = ALIGN(stoppt, CONFIG_SYS_CACHELINE_SIZE);
+	mmu_page_table_flush(startpt, stoppt);
 }
 
 __weak void dram_bank_mmu_setup(int bank)

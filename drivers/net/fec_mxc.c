@@ -983,8 +983,6 @@ static int fec_probe(bd_t *bd, int dev_id, uint32_t base_addr,
 	uint32_t start;
 	int ret = 0;
 
-	puts("fec_probe:	");
-
 	/* create and fill edev struct */
 	edev = (struct eth_device *)malloc(sizeof(struct eth_device));
 	if (!edev) {
@@ -1117,13 +1115,13 @@ int fecmxc_initialize_multi(bd_t *bd, int dev_id, int phy_id, uint32_t addr)
 	base_mii = addr;
 #endif
 #endif
-	printf("eth_init: fec_probe(bd, %i, %i) @ %08x\n", dev_id, phy_id, addr);
-	debug("eth_init: fec_probe(bd, %i, %i) @ %08x\n", dev_id, phy_id, addr);
+
 	bus = fec_get_miibus(base_mii, dev_id);
+	DEBUG_INFO("bus->name:%s",bus->name);
 	if (!bus)
 		return -ENOMEM;
 #ifdef CONFIG_PHYLIB
-	phydev = phy_find_by_mask(bus, 1 << phy_id, PHY_INTERFACE_MODE_RGMII);
+	phydev = phy_find_by_mask(bus, 1 << phy_id, PHY_INTERFACE_MODE_RMII);
 	if (!phydev) {
 		printf("No phydev found \n");
 		mdio_unregister(bus);

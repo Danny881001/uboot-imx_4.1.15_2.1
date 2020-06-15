@@ -242,7 +242,7 @@ int eth_initialize(void)
 	eth_current = NULL;
 	eth_common_init();
 
-	printf("Eth_legacy:	");
+	//DEBUG_INFO("function eth_initialize in Eth_legacy.c");
 	/*
 	 * If board-specific initialization exists, call it.
 	 * If not, call a CPU-specific one
@@ -263,6 +263,7 @@ int eth_initialize(void)
 	} else {
 		struct eth_device *dev = eth_devices;
 		char *ethprime = getenv("ethprime");
+		//DEBUG_INFO("ethprime: %s",ethprime);
 
 		bootstage_mark(BOOTSTAGE_ID_NET_ETH_INIT);
 		do {
@@ -281,12 +282,14 @@ int eth_initialize(void)
 					"\n");
 
 			eth_write_hwaddr(dev, "eth", dev->index);
+			//DEBUG_INFO("num_devices: %d, dev->index: %d" ,num_devices ,dev->index);
 
 			dev = dev->next;
 			num_devices++;
 		} while (dev != eth_devices);
 
 		eth_current_changed();
+		DEBUG_INFO("eth_current->name: %s" ,eth_current->name);
 		putc('\n');
 	}
 

@@ -2092,6 +2092,28 @@ void video_clear(void)
 #endif
 }
 
+void video_clear_color(u32 color)
+{
+	if (!video_fb_address)
+		return;
+#ifdef VIDEO_HW_RECTFILL
+	video_hw_rectfill(VIDEO_PIXEL_SIZE,	/* bytes per pixel */
+			  0,			/* dest pos x */
+			  0,			/* dest pos y */
+			  VIDEO_VISIBLE_COLS,	/* frame width */
+			  VIDEO_VISIBLE_ROWS,	/* frame height */
+			  color			/* fill color */
+	);
+#else
+	memsetl(video_fb_address,((VIDEO_VISIBLE_ROWS * VIDEO_LINE_LEN) / sizeof(int))/4, RED);
+	memsetl(video_fb_address+((VIDEO_VISIBLE_ROWS * VIDEO_LINE_LEN) / sizeof(int)),((VIDEO_VISIBLE_ROWS * VIDEO_LINE_LEN) / sizeof(int))/4, GREEN);
+	memsetl(video_fb_address+((VIDEO_VISIBLE_ROWS * VIDEO_LINE_LEN) / sizeof(int))*2,((VIDEO_VISIBLE_ROWS * VIDEO_LINE_LEN) / sizeof(int))/4, BLUE);
+	memsetl(video_fb_address+((VIDEO_VISIBLE_ROWS * VIDEO_LINE_LEN) / sizeof(int))*3,((VIDEO_VISIBLE_ROWS * VIDEO_LINE_LEN) / sizeof(int))/4, WHITE);
+
+#endif
+}
+
+
 static int video_init(void)
 {
 	unsigned char color8;
@@ -2179,12 +2201,14 @@ static int video_init(void)
 	eorx = fgx ^ bgx;
 
 	video_clear();
-	debug("fgx=0x%08x,bgx=0x%08x\n",fgx,bgx);
+	video_clear_color(RED);
+	//flush_cache(VIDEO_FB_ADRS, VIDEO_SIZE);
+	DEBUG_INFO("fgx=0x%08x,bgx=0x%08x\n",fgx,bgx);
 
 #ifdef CONFIG_VIDEO_LOGO
 	/* Plot the logo and get start point of console */
-	debug("Video: Drawing the logo ...\n");
-	video_console_address = video_logo();
+	DEBUG_INFO("Video: Drawing the logo ...\n");
+	//video_console_address = video_logo();
 #else
 	video_console_address = video_fb_address;
 #endif
@@ -2193,8 +2217,11 @@ static int video_init(void)
 	console_col = 0;
 	console_row = 0;
 
-	if (cfb_do_flush_cache)
+	if (cfb_do_flush_cache){
 		flush_cache(VIDEO_FB_ADRS, VIDEO_SIZE);
+		
+		DEBUG_INFO("VIDEO_FB_ADRS:0x%x, VIDEO_ROWS: %d, VIDEO_COLS: %d, VIDEO_PIXEL_SIZE:%d",VIDEO_FB_ADRS,VIDEO_ROWS,VIDEO_COLS,VIDEO_PIXEL_SIZE);
+	}
 
 	return 0;
 }

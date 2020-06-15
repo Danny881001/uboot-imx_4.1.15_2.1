@@ -1,0 +1,11 @@
+---- VIDEO_FB_ADRS Matches (11 in 1 files) ----
+cfb_console.c (drivers\video) line 43 :  * VIDEO_FB_ADRS	      - start of video memory
+cfb_console.c (drivers\video) line 161 : #define VIDEO_FB_ADRS		(pGD->frameAdrs)
+console_cursor in cfb_console.c (drivers\video) : 		flush_cache(VIDEO_FB_ADRS, VIDEO_SIZE);
+video_putc in cfb_console.c (drivers\video) : 		flush_cache(VIDEO_FB_ADRS, VIDEO_SIZE);
+video_puts in cfb_console.c (drivers\video) : 		flush_cache(VIDEO_FB_ADRS, VIDEO_SIZE);
+video_display_bitmap in cfb_console.c (drivers\video) : 		flush_cache(VIDEO_FB_ADRS, VIDEO_SIZE);
+video_init in cfb_console.c (drivers\video) : 	video_fb_address = (void *) VIDEO_FB_ADRS;
+video_init in cfb_console.c (drivers\video) : 	//flush_cache(VIDEO_FB_ADRS, VIDEO_SIZE);
+video_init in cfb_console.c (drivers\video) : 		flush_cache(VIDEO_FB_ADRS, VIDEO_SIZE);
+video_init in cfb_console.c (drivers\video) : 		DEBUG_INFO("VIDEO_FB_ADRS:0x%x, VIDEO_ROWS: %d, VIDEO_COLS: %d, VIDEO_PIXEL_SIZE:%d",VIDEO_FB_ADRS,VIDEO_ROWS,VIDEO_COLS,VIDEO_PIXEL_SIZE);

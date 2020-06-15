@@ -60,6 +60,11 @@ struct nand_flash_dev nand_flash_ids[] = {
 		{ .id = {0xad, 0xde, 0x94, 0xda, 0x74, 0xc4} },
 		  SZ_8K, SZ_8K, SZ_2M, 0, 6, 640, NAND_ECC_INFO(40, SZ_1K),
 		  4 },
+	{"F59L2G81A 256M 3.3V 8-bit",
+		{ .id = {0xc8, 0xda, 0x90, 0x95, 0x44} },
+		  SZ_2K, SZ_256, SZ_128K, 0, 5, 64, NAND_ECC_INFO(4, SZ_512),
+		  4 },
+
 
 	LEGACY_ID_NAND("NAND 4MiB 5V 8-bit",   0x6B, 4, SZ_8K, SP_OPTIONS),
 	LEGACY_ID_NAND("NAND 4MiB 3,3V 8-bit", 0xE3, 4, SZ_8K, SP_OPTIONS),
@@ -115,6 +120,7 @@ struct nand_flash_dev nand_flash_ids[] = {
 	EXTENDED_ID_NAND("NAND 128MiB 1,8V 16-bit", 0xB1, 128, LP_OPTIONS16),
 	EXTENDED_ID_NAND("NAND 128MiB 3,3V 16-bit", 0xC1, 128, LP_OPTIONS16),
 	EXTENDED_ID_NAND("NAND 128MiB 1,8V 16-bit", 0xAD, 128, LP_OPTIONS16),
+
 
 	/* 2 Gigabit */
 	EXTENDED_ID_NAND("NAND 256MiB 1,8V 8-bit",  0xAA, 256, LP_OPTIONS),
@@ -189,6 +195,7 @@ struct nand_manufacturers nand_manuf_ids[] = {
 	{NAND_MFR_SANDISK, "SanDisk"},
 	{NAND_MFR_INTEL, "Intel"},
 	{NAND_MFR_ATO, "ATO"},
+	{NAND_MFR_ESMT, "ESMT"},
 	{0x0, "Unknown"}
 };
 

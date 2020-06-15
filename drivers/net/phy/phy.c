@@ -621,6 +621,7 @@ static struct phy_device *phy_device_create(struct mii_dev *bus, int addr,
 	dev->bus = bus;
 
 	dev->drv = get_phy_driver(dev, interface);
+	DEBUG_INFO("phy_driver name: %s",dev->drv->name);
 
 	phy_probe(dev);
 
@@ -669,6 +670,7 @@ static struct phy_device *create_phy_by_mask(struct mii_dev *bus,
 	while (phy_mask) {
 		int addr = ffs(phy_mask) - 1;
 		int r = get_phy_id(bus, addr, devad, &phy_id);
+		DEBUG_INFO("phy_mask:0x%x,addr: 0x%x,phy_id:0x%x",phy_mask,addr,phy_id);
 		/* If the PHY ID is mostly f's, we didn't find anything */
 		if (r == 0 && (phy_id & 0x1fffffff) != 0x1fffffff)
 			return phy_device_create(bus, addr, phy_id, interface);
@@ -711,7 +713,6 @@ static struct phy_device *get_phy_device_by_mask(struct mii_dev *bus,
 		if (phydev)
 			return phydev;
 	}
-	printf("\n%s PHY: ", bus->name);
 	debug("\n%s PHY: ", bus->name);
 	while (phy_mask) {
 		int addr = ffs(phy_mask) - 1;
@@ -831,7 +832,7 @@ void phy_connect_dev(struct phy_device *phydev, struct eth_device *dev)
 				phydev->dev->name, dev->name);
 	}
 	phydev->dev = dev;
-	debug("%s connected to %s\n", dev->name, phydev->drv->name);
+	DEBUG_INFO("%s connected to %s\n", dev->name, phydev->drv->name);
 }
 
 #ifdef CONFIG_DM_ETH

@@ -22,6 +22,33 @@
 /* uncomment for SECURE mode support */
 /* #define CONFIG_SECURE_BOOT */
 
+#define X7
+/*#define NC02*/
+
+/*#define DEBUG*/
+#define DEBUG_MODE
+
+#if defined (DEBUG_MODE)	/*fujie add*/
+#define DEBUG_INFO(fmt,arg...) \
+	do{\
+		printf("[*** "); \
+		printf(fmt,##arg); \
+		printf("]\n"); \
+	}while(0);
+#define DEBUG_X(x,fmt,arg...) \
+	do{\
+		if(x) printf(fmt,##arg); \
+	}while(0);
+#define DEBUG_PUTS(str) puts(str)
+#define DEBUG_PUTC(c) putc(c)
+#else
+#define DEBUG_INFO(fmt,arg...) 
+#define DEBUG_X(x,fmt,arg...)
+#define DEBUG_PUTS(str)
+#define DEBUG_PUTC(c)
+#endif
+
+
 #ifdef CONFIG_SECURE_BOOT
 #ifndef CONFIG_CSF_SIZE
 #define CONFIG_CSF_SIZE 0x4000
@@ -34,7 +61,9 @@
 #define PHYS_SDRAM_SIZE		SZ_256M
 #define CONFIG_BOOTARGS_CMA_SIZE   "cma=96M "
 #else
-#define PHYS_SDRAM_SIZE		SZ_512M
+
+/*#define PHYS_SDRAM_SIZE		SZ_512M     //Changed by danny*/
+#define PHYS_SDRAM_SIZE		SZ_128M
 #define CONFIG_BOOTARGS_CMA_SIZE   ""
 /* DCDC used on 14x14 EVK, no PMIC */
 #undef CONFIG_LDO_BYPASS_CHECK
@@ -91,8 +120,67 @@
 
 #define CONFIG_SYS_MMC_IMG_LOAD_PART	1
 
+/*
+Kernel command line: console=ttyS2,115200 rdinit=/linuxrc g_mass_storage.stall=0 g_mass_storage.removable=1 g_mass_storage.file=/fat g_mass_storage.ro=1 
+g_mass_storage.idVendor=0x066F g_mass_storage.idProduct=0x37FF g_mass_storage.iSerialNumber= 
+mtdparts=gpmi-nand:3m(boot),128k(ee),8m(logo),10m(kernel),1m(dtb),103m(rootfs)
+
+nand: device found, Manufacturer ID: 0xc8, Chip ID: 0xda
+nand: ESMT NAND 256MiB 3,3V 8-bit
+nand: 256 MiB, SLC, erase size: 128 KiB, page size: 2048, OOB size: 64
+gpmi-nand 1806000.gpmi-nand: use legacy bch geometry
+Bad block table not found for chip 0
+Bad block table not found for chip 0
+Scanning device for bad blocks
+Bad block table written to 0x00000ffe0000, version 0x01
+Bad block table written to 0x00000ffc0000, version 0x01
+6 cmdlinepart partitions found on MTD device gpmi-nand
+Creating 6 MTD partitions on "gpmi-nand":
+0x000000000000-0x000000300000 : "boot"
+0x000000300000-0x000000320000 : "ee"
+0x000000320000-0x000000b20000 : "logo"
+0x000000b20000-0x000001520000 : "kernel"
+0x000001520000-0x000001620000 : "dtb"
+0x000001620000-0x000007d20000 : "rootfs"
+gpmi-nand 1806000.gpmi-nand: driver registered.
+
+#define MTD_NAND_PARTITIONS_BOOTLOADER_OFFSET  0x00000000
+#define MTD_NAND_PARTITIONS_BOOTLOADER_SIZE    0x00300000		//3M
+
+#define MTD_NAND_PARTITIONS_KERNEL_OFFSET      0x04000000 
+#define MTD_NAND_PARTITIONS_KERNEL_SIZE        0x00800000 		//8M
+
+#define MTD_NAND_PARTITIONS_DTB_OFFSET         0x05000000 
+#define MTD_NAND_PARTITIONS_DTB_SIZE           0x00100000 		//1M
+
+#define MTD_NAND_PARTITIONS_ROOTFS_OFFSET      0x06100000 
+#define MTD_NAND_PARTITIONS_ROOTFS_SIZE        0x09F00000 		//159M
+
+
+*/
+#define MTD_NAND_PARTITIONS_BOOTLOADER_OFFSET  0x00000000
+#define MTD_NAND_PARTITIONS_BOOTLOADER_SIZE    0x00300000		//3M
+
+#define MTD_NAND_PARTITIONS_EE_OFFSET      	   0x00300000 
+#define MTD_NAND_PARTITIONS_EE_SIZE            0x00020000 		//128K
+
+#define MTD_NAND_PARTITIONS_LOGO_OFFSET        0x00320000 
+#define MTD_NAND_PARTITIONS_LOGO_SIZE          0x00800000 		//8M
+
+	
+#define MTD_NAND_PARTITIONS_KERNEL_OFFSET      0x00b20000 
+#define MTD_NAND_PARTITIONS_KERNEL_SIZE        0x00a00000 		//10M
+	
+#define MTD_NAND_PARTITIONS_DTB_OFFSET         0x01520000 
+#define MTD_NAND_PARTITIONS_DTB_SIZE           0x00100000 		//1M
+	
+#define MTD_NAND_PARTITIONS_ROOTFS_OFFSET      0x01620000 
+#define MTD_NAND_PARTITIONS_ROOTFS_SIZE        0x0e9e0000 		//159M
+
+
 #ifdef CONFIG_SYS_BOOT_NAND
-#define CONFIG_MFG_NAND_PARTITION "mtdparts=gpmi-nand:64m(boot),16m(kernel),16m(dtb),1m(misc),-(rootfs) "
+/*#define CONFIG_MFG_NAND_PARTITION "mtdparts=gpmi-nand:64m(boot),16m(kernel),16m(dtb),1m(misc),-(rootfs) "*/
+#define CONFIG_MFG_NAND_PARTITION "mtdparts=gpmi-nand:3m(boot),128k(ee),8m(logo),10m(kernel),1m(dtb),-(rootfs) "
 #else
 #define CONFIG_MFG_NAND_PARTITION ""
 #endif
@@ -115,16 +203,22 @@
 #if defined(CONFIG_SYS_BOOT_NAND)
 #define CONFIG_EXTRA_ENV_SETTINGS \
 	CONFIG_MFG_ENV_SETTINGS \
-	"panel=TFT43AB\0" \
+	"panel=PC070TN92-C\0" \
 	"fdt_addr=0x83000000\0" \
 	"fdt_high=0xffffffff\0"	  \
-	"console=ttymxc0\0" \
-	"bootargs=console=ttymxc0,115200 ubi.mtd=4 "  \
+	"console=ttymxc2\0" \
+	"ipaddr=192.168.210.75\0" \
+	"ethaddr=08:00:3e:26:0a:5b\0" \
+	"serverip=192.168.210.73\0" \
+	"netmask=255.255.255.0\0" \
+	"gatewayip=192.168.210.1\0" \
+	"ip_dyn=no\0" \
+	"bootargs=console=ttymxc2,115200 ubi.mtd=5 "  \
 		"root=ubi0:rootfs rootfstype=ubifs "		     \
 		CONFIG_BOOTARGS_CMA_SIZE \
-		"mtdparts=gpmi-nand:64m(boot),16m(kernel),16m(dtb),1m(misc),-(rootfs)\0"\
-	"bootcmd=nand read ${loadaddr} 0x4000000 0x800000;"\
-		"nand read ${fdt_addr} 0x5000000 0x100000;"\
+		"mtdparts=gpmi-nand:3m(boot),128k(ee),8m(logo),10m(kernel),1m(dtb),-(rootfs)\0"\
+	"bootcmd=nand read ${loadaddr} 0xb20000 0xa00000;"\
+		"nand read ${fdt_addr} 0x1520000 0x100000;"\
 		"bootz ${loadaddr} - ${fdt_addr}\0"
 
 #else
@@ -135,7 +229,7 @@
 	"console=ttymxc2\0" \
 	"ipaddr=192.168.210.245\0" \
 	"ethaddr=08:00:3e:26:0a:5b\0" \
-	"serverip=192.168.210.11\0" \
+	"serverip=192.168.210.73\0" \
 	"netmask=255.255.255.0\0" \
 	"gatewayip=192.168.210.1\0" \
 	"fdt_high=0xffffffff\0" \
@@ -144,7 +238,7 @@
 	"fdt_addr=0x83000000\0" \
 	"boot_fdt=try\0" \
 	"ip_dyn=no\0" \
-	"panel=TFT43AB\0" \
+	"panel=PC070TN92-C\0" \
 	"mmcdev="__stringify(CONFIG_SYS_MMC_ENV_DEV)"\0" \
 	"mmcpart=" __stringify(CONFIG_SYS_MMC_IMG_LOAD_PART) "\0" \
 	"mmcroot=" CONFIG_MMCROOT " rootwait rw\0" \
@@ -255,6 +349,7 @@
 #elif defined CONFIG_SYS_BOOT_NAND
 #define CONFIG_SYS_USE_NAND
 #define CONFIG_ENV_IS_IN_NAND
+/*#define CONFIG_ENV_IS_NOWHERE*/
 #else
 #define CONFIG_FSL_QSPI
 #define CONFIG_ENV_IS_IN_MMC
@@ -350,7 +445,7 @@
 #define CONFIG_FEC_MXC_PHYADDR		0x0
 #define CONFIG_FEC_XCV_TYPE		RMII
 #endif
-#define CONFIG_ETHPRIME			"FEC"
+#define CONFIG_ETHPRIME			"FEC0"
 
 #define CONFIG_PHYLIB
 /*#define CONFIG_PHY_MICREL*/
@@ -376,6 +471,8 @@
 #define CONFIG_VIDEO_BMP_RLE8
 #define CONFIG_VIDEO_BMP_LOGO
 #define CONFIG_IMX_VIDEO_SKIP
+#define CONFIG_SYS_CONSOLE_BG_COL	0xff
+#define CONFIG_SYS_CONSOLE_FG_COL	0x00
 #endif
 #endif
 
@@ -384,5 +481,17 @@
 #if defined(CONFIG_ANDROID_SUPPORT)
 #include "mx6ullevk_android.h"
 #endif
+
+#define RGB888(R,G,B)  ((R<<16)|(G<<8)|(B<<0))
+#define	WHITE		RGB888(0xFF, 0xFF, 0xFF)
+#define	BLACK		RGB888(0x00, 0x00, 0x00)
+#define	RED			RGB888(0xFF, 0x00, 0x00)
+#define	GREEN		RGB888(0x00, 0xFF, 0x00)
+#define	BLUE		RGB888(0x00, 0x00, 0xFF)
+#define	LIGHTGRAY	RGB888(192, 192, 192)
+#define	MIDGRAY		RGB888(128, 128, 128)
+#define	DARKGRAY	RGB888(90, 90, 90)
+
+
 
 #endif

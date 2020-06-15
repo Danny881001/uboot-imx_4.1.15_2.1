@@ -101,7 +101,7 @@ static iomux_v3_cfg_t const iox_pads[] = {
 	/* IOX_SHCP */
 	MX6_PAD_BOOT_MODE1__GPIO5_IO11 | MUX_PAD_CTRL(NO_PAD_CTRL),
 	/* IOX_STCP */
-	MX6_PAD_SNVS_TAMPER7__GPIO5_IO07 | MUX_PAD_CTRL(NO_PAD_CTRL),
+	/*MX6_PAD_SNVS_TAMPER7__GPIO5_IO07 | MUX_PAD_CTRL(NO_PAD_CTRL),*/
 	/* IOX_nOE */
 	MX6_PAD_SNVS_TAMPER8__GPIO5_IO08 | MUX_PAD_CTRL(NO_PAD_CTRL),
 
@@ -515,6 +515,7 @@ int board_mmc_getcd(struct mmc *mmc)
 int board_mmc_init(bd_t *bis)
 {
 #ifdef CONFIG_SPL_BUILD
+	puts("Enter checkboard() in mx6ullevk.c\n");
 #if defined(CONFIG_MX6ULL_EVK_EMMC_REWORK)
 	imx_iomux_v3_setup_multiple_pads(usdhc2_emmc_pads,
 					 ARRAY_SIZE(usdhc2_emmc_pads));
@@ -688,49 +689,67 @@ static iomux_v3_cfg_t const fec2_pads[] = {
 
 };
 
+#if defined(NC02) //for NC02
 static iomux_v3_cfg_t const fec_rst_int_pads[] = {
 	/*fec 1 rst */
 	MX6_PAD_GPIO1_IO04__GPIO1_IO04 | MUX_PAD_CTRL(NO_PAD_CTRL),
 	/*fec 1 interrupt */
 	MX6_PAD_GPIO1_IO08__GPIO1_IO08 | MUX_PAD_CTRL(NO_PAD_CTRL),
-
+	/*fec 2 rst */
 	MX6_PAD_GPIO1_IO03__GPIO1_IO03 | MUX_PAD_CTRL(NO_PAD_CTRL),
-	/*MX6_PAD_GPIO1_IO09__GPIO1_IO09 | MUX_PAD_CTRL(NO_PAD_CTRL),*/
+	MX6_PAD_GPIO1_IO09__GPIO1_IO09 | MUX_PAD_CTRL(NO_PAD_CTRL),
 };
+#else         // for X7
+static iomux_v3_cfg_t const fec_rst_int_pads[] = {
+	/*fec 1 rst */
+	MX6_PAD_SNVS_TAMPER7__GPIO5_IO07 | MUX_PAD_CTRL(NO_PAD_CTRL),
+	/*fec 1 interrupt */
+	MX6_PAD_SNVS_TAMPER5__GPIO5_IO05 | MUX_PAD_CTRL(NO_PAD_CTRL),
+};
+
+#endif
 
 static void setup_iomux_fec(int fec_id)
 {
 	if (fec_id == 0){
 		imx_iomux_v3_setup_multiple_pads(fec1_pads,
 						 ARRAY_SIZE(fec1_pads));
+		gpio_direction_output(IMX_GPIO_NR(1, 4) , 0);
+		udelay(500);
+		gpio_set_value(IMX_GPIO_NR(1, 4), 1);
 	}
 	else{
 		imx_iomux_v3_setup_multiple_pads(fec2_pads,
 						 ARRAY_SIZE(fec2_pads));
+		//gpio_direction_output(IMX_GPIO_NR(1, 3) , 0);
+		//udelay(500);
+		//gpio_set_value(IMX_GPIO_NR(1, 3), 1);
 	}
 
-	//imx_iomux_v3_setup_multiple_pads(fec_rst_int_pads,
-						 //ARRAY_SIZE(fec_rst_int_pads));
+	imx_iomux_v3_setup_multiple_pads(fec_rst_int_pads,
+						 ARRAY_SIZE(fec_rst_int_pads));
 
-	
-	//gpio_direction_output(IMX_GPIO_NR(1, 4) , 0);
+	//gpio_direction_output(IMX_GPIO_NR(5, 7) , 0);
 	//udelay(500);
-	//gpio_set_value(IMX_GPIO_NR(1, 4), 1);
-
-	//gpio_direction_output(IMX_GPIO_NR(1, 3) , 0);
-	//udelay(500);
-	//gpio_set_value(IMX_GPIO_NR(1, 3), 1);
+	//gpio_set_value(IMX_GPIO_NR(5, 7), 1);
 	
 }
 
 int board_eth_init(bd_t *bis)
 {
-	setup_iomux_fec(CONFIG_FEC_ENET_DEV);
-	
+	DEBUG_INFO("fecmxc_initialize_multi: CONFIG_FEC_ENET_DEV: %i, CONFIG_FEC_MXC_PHYADDR: %i, IMX_FEC_BASE: %08x",
+		CONFIG_FEC_ENET_DEV, CONFIG_FEC_MXC_PHYADDR, IMX_FEC_BASE);
 
-	return fecmxc_initialize_multi(bis, CONFIG_FEC_ENET_DEV,
-				 
-      CONFIG_FEC_MXC_PHYADDR, IMX_FEC_BASE);
+	int ret;
+
+	setup_iomux_fec(CONFIG_FEC_ENET_DEV);
+
+	ret = fecmxc_initialize_multi(bis, CONFIG_FEC_ENET_DEV,
+		CONFIG_FEC_MXC_PHYADDR, IMX_FEC_BASE);
+	if (ret)
+		printf("FEC%d MXC: %s:failed\n", CONFIG_FEC_ENET_DEV, __func__);
+
+	return 0;
 
 	//return 0;
 }
@@ -772,15 +791,44 @@ static int setup_fec(int fec_id)
 	return 0;
 }
 
+/*
+	=> ping 192.168.210.73
+	Trying FEC0
+	Using FEC0 device
+
+	ARP Retry count exceeded; starting again
+	ping failed; host 192.168.210.73 is not alive
+	=> mii read 1 0x1f
+	D198
+*/
+//This function is designed for CONFIG_PHY_MICREL, not for CONFIG_PHY_SMSC(SMSC LAN8720)
+//For LAN8720, we need to delete it. if not ,the above error will be exit.
+/* 
 int board_phy_config(struct phy_device *phydev)
 {
 	phy_write(phydev, MDIO_DEVAD_NONE, 0x1f, 0x8190);
 
 	if (phydev->drv->config)
 		phydev->drv->config(phydev);
-
+	
 	return 0;
 }
+*/
+int board_phy_config(struct phy_device *phydev)
+{
+	DEBUG_INFO("DUMP LAN8720 REG");
+	int i,val;
+	for(i=0; i<32; i++){
+		if((i%8) == 0)
+			printf("\n");
+		val = phy_read(phydev, MDIO_DEVAD_NONE, i);
+		printf("0x%4x ",val);
+	}
+	printf("\n");
+	return 0;
+}
+
+
 #endif
 
 #ifdef CONFIG_VIDEO_MXS
@@ -814,11 +862,11 @@ static iomux_v3_cfg_t const lcd_pads[] = {
 	MX6_PAD_LCD_DATA22__LCDIF_DATA22 | MUX_PAD_CTRL(LCD_PAD_CTRL),
 	MX6_PAD_LCD_DATA23__LCDIF_DATA23 | MUX_PAD_CTRL(LCD_PAD_CTRL),
 
-	/* LCD_RST */
-	MX6_PAD_SNVS_TAMPER9__GPIO5_IO09 | MUX_PAD_CTRL(NO_PAD_CTRL),
+	/* LCD_RST 
+	MX6_PAD_SNVS_TAMPER9__GPIO5_IO09 | MUX_PAD_CTRL(NO_PAD_CTRL),*/
 
 	/* Use GPIO for Brightness adjustment, duty cycle = period. */
-	/* MX6_PAD_GPIO1_IO08__GPIO1_IO08 | MUX_PAD_CTRL(NO_PAD_CTRL), */
+	MX6_PAD_GPIO1_IO08__GPIO1_IO08 | MUX_PAD_CTRL(NO_PAD_CTRL), 
 };
 
 void do_enable_parallel_lcd(struct display_info_t const *dev)
@@ -828,12 +876,12 @@ void do_enable_parallel_lcd(struct display_info_t const *dev)
 	imx_iomux_v3_setup_multiple_pads(lcd_pads, ARRAY_SIZE(lcd_pads));
 
 	/* Reset the LCD */
-	gpio_direction_output(IMX_GPIO_NR(5, 9) , 0);
-	udelay(500);
-	gpio_direction_output(IMX_GPIO_NR(5, 9) , 1);
+	//gpio_direction_output(IMX_GPIO_NR(5, 9) , 0);
+	//udelay(500);
+	//gpio_direction_output(IMX_GPIO_NR(5, 9) , 1);
 
 	/* Set Brightness to high */
-	//gpio_direction_output(IMX_GPIO_NR(1, 8) , 1);
+	gpio_direction_output(IMX_GPIO_NR(1, 8) , 1);
 }
 
 struct display_info_t const displays[] = {{
@@ -843,16 +891,16 @@ struct display_info_t const displays[] = {{
 	.detect = NULL,
 	.enable	= do_enable_parallel_lcd,
 	.mode	= {
-		.name			= "TFT43AB",
-		.xres           = 480,
-		.yres           = 272,
-		.pixclock       = 108695,
-		.left_margin    = 8,
-		.right_margin   = 4,
-		.upper_margin   = 2,
-		.lower_margin   = 4,
-		.hsync_len      = 41,
-		.vsync_len      = 10,
+		.name			= "PC070TN92-C",
+		.xres           = 800,
+		.yres           = 480,
+		.pixclock       = KHZ2PICOS(40000),//单位ps
+		.left_margin    = 46,//HBP
+		.right_margin   = 210,//HFP
+		.upper_margin   = 23,//VBP
+		.lower_margin   = 22,//VFP
+		.hsync_len      = 1,//HSPW
+		.vsync_len      = 1,//VSPW
 		.sync           = 0,
 		.vmode          = FB_VMODE_NONINTERLACED
 	} 
@@ -946,10 +994,157 @@ int checkboard(void)
 	setup_iomux_gpio();
 	gpio_direction_output(IMX_GPIO_NR(1, 19), 1);
 	gpio_direction_output(CPU_LED, 0);
-	puts("gpio_direction_output(IMX_GPIO_NR(1, 19), 1);\n");
+	puts("checkboard() in mx6ullevk.c\n");
 
 	return 0;
 }
+
+void tftp_zImage(void)
+{
+    char tmpstring[64]={0};
+    sprintf(tmpstring,"tftp zImage-myimx6"); 
+    run_command(tmpstring,0);
+}
+
+
+void erase_zImage(void)
+{
+    char tmpstring[64]={0};
+    sprintf(tmpstring,"nand erase 0x%x 0x%x",MTD_NAND_PARTITIONS_KERNEL_OFFSET,MTD_NAND_PARTITIONS_KERNEL_SIZE);  //2010-7-28
+    run_command(tmpstring,0);
+}
+
+int write_zimage(unsigned int ram_addr, unsigned int len)
+{
+    char tmpstring[64]={0};
+    DEBUG_INFO("+%s\r\n",__func__);
+    //sprintf(tmpstring,"nand write 0x%08x 0x920000 0x300000",ram_addr);
+    sprintf(tmpstring,"nand write 0x%08x 0x%08x 0x%08x",ram_addr,MTD_NAND_PARTITIONS_KERNEL_OFFSET,len);  //2010-7-28
+    //DEBUG_INFO("%s\r\n",tmpstring);
+    run_command(tmpstring,0);
+    DEBUG_INFO("-%s\r\n",__func__);
+    return 0;
+}
+
+
+int do_update_zImage(cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
+{
+	tftp_zImage();
+	erase_zImage();
+	write_zimage(0x80800000,MTD_NAND_PARTITIONS_KERNEL_SIZE);
+	DEBUG_INFO("-%s\r\n",__func__);
+	return 0;
+}
+
+
+U_BOOT_CMD(
+	updatekernel,	CONFIG_SYS_MAXARGS,	1,	do_update_zImage,
+	"updatekernel  - update zImage\n",
+	""
+);
+
+void tftp_dtb(void)
+{
+    char tmpstring[64]={0};
+    sprintf(tmpstring,"tftp zImage-imx6ull.dtb"); 
+    run_command(tmpstring,0);
+}
+
+
+void erase_dtb(void)
+{
+    char tmpstring[64]={0};
+    sprintf(tmpstring,"nand erase 0x%x 0x%x",MTD_NAND_PARTITIONS_DTB_OFFSET,MTD_NAND_PARTITIONS_DTB_SIZE);  //2010-7-28
+    run_command(tmpstring,0);
+}
+
+int write_dtb(unsigned int ram_addr, unsigned int len)
+{
+    char tmpstring[64]={0};
+    DEBUG_INFO("+%s\r\n",__func__);
+    //sprintf(tmpstring,"nand write 0x%08x 0x920000 0x300000",ram_addr);
+    sprintf(tmpstring,"nand write 0x%08x 0x%08x 0x%08x",ram_addr,MTD_NAND_PARTITIONS_DTB_OFFSET,len);  //2010-7-28
+    //DEBUG_INFO("%s\r\n",tmpstring);
+    run_command(tmpstring,0);
+    DEBUG_INFO("-%s\r\n",__func__);
+    return 0;
+}
+
+
+int do_update_dtb(cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
+{
+	tftp_dtb();
+	erase_dtb();
+	write_dtb(0x80800000,MTD_NAND_PARTITIONS_DTB_SIZE);
+	DEBUG_INFO("-%s\r\n",__func__);
+	return 0;
+}
+
+
+U_BOOT_CMD(
+	updatedtb,	CONFIG_SYS_MAXARGS,	1,	do_update_dtb,
+	"updatedtb  - update dtb\n",
+	""
+);
+
+void tftp_rootfs(void)
+{
+    char tmpstring[64]={0};
+    sprintf(tmpstring,"tftp kboard_root_release.img"); 
+    run_command(tmpstring,0);
+}
+
+
+void erase_rootfs(void)
+{
+    char tmpstring[64]={0};
+    sprintf(tmpstring,"nand erase 0x%x 0x%x",MTD_NAND_PARTITIONS_ROOTFS_OFFSET,MTD_NAND_PARTITIONS_ROOTFS_SIZE);  //2010-7-28
+    run_command(tmpstring,0);
+}
+
+int write_rootfs(u32 ram_addr, u32 nand_addr,u32 len)
+{
+    char tmpstring[64]={0};
+    u32 len_page_aligned=0;
+    DEBUG_INFO("+%s\r\n",__func__);
+	
+	if(nand_addr==MTD_NAND_PARTITIONS_ROOTFS_OFFSET)
+		erase_rootfs();
+	
+    len_page_aligned = len;
+    if(len%0x800 != 0) {
+        len_page_aligned = ((len/0x800)*0x800);
+        //printf("烧写长度没有页对齐，处理前=0x%08x,处理后=0x%08x\r\n",len,len_page_aligned);
+    }
+    sprintf(tmpstring,"nand write.trimffs 0x%08x 0x%08x 0x%08x",ram_addr,nand_addr,len_page_aligned);  //2010-7-28
+	DEBUG_INFO("%s\r\n",tmpstring);
+    //run_command(tmpstring,0);
+
+    DEBUG_INFO("-%s\r\n",__func__);
+	DEBUG_INFO("Enter nand write command according to download file length\r\n");
+    return 0; 
+} 
+
+
+
+int do_update_rootfs(cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
+{
+	tftp_rootfs();
+	//erase_rootfs();
+	write_rootfs(0x80800000,MTD_NAND_PARTITIONS_ROOTFS_OFFSET,0x1000000);
+	DEBUG_INFO("-%s\r\n",__func__);
+	return 0;
+}
+
+
+U_BOOT_CMD(
+	updaterootfs,	CONFIG_SYS_MAXARGS,	1,	do_update_rootfs,
+	"updaterootfs  - update rootfs\n",
+	""
+);
+
+
+
 
 #ifdef CONFIG_FSL_FASTBOOT
 void board_fastboot_setup(void)

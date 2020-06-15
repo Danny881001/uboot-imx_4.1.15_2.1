@@ -530,7 +530,7 @@ static int mxcfb_probe(u32 interface_pix_fmt, uint8_t disp,
 
 	mxcfbi->ipu_di_pix_fmt = interface_pix_fmt;
 	fb_videomode_to_var(&fbi->var, mode);
-	fbi->var.bits_per_pixel = 16;
+	fbi->var.bits_per_pixel = 24;
 	fbi->fix.line_length = fbi->var.xres * (fbi->var.bits_per_pixel / 8);
 	fbi->fix.smem_len = fbi->var.yres_virtual * fbi->fix.line_length;
 
@@ -555,8 +555,11 @@ static int mxcfb_probe(u32 interface_pix_fmt, uint8_t disp,
 	panel.frameAdrs = (u32)fbi->screen_base;
 	panel.memSize = fbi->screen_size;
 
-	panel.gdfBytesPP = 2;
-	panel.gdfIndex = GDF_16BIT_565RGB;
+	//panel.gdfBytesPP = 2;
+	//panel.gdfIndex = GDF_16BIT_565RGB;
+	panel.gdfBytesPP = 3;
+	panel.gdfIndex = GDF_24BIT_888RGB;
+
 
 	ipu_dump_registers();
 
@@ -585,6 +588,31 @@ void ipuv3_fb_shutdown(void)
 	}
 }
 
+/******************************************************************************
+
+typedef struct graphic_device {
+    unsigned int isaBase;
+    unsigned int pciBase;
+    unsigned int dprBase;
+    unsigned int vprBase;
+    unsigned int cprBase;
+    unsigned int frameAdrs;
+    unsigned int memSize;
+    unsigned int mode;
+    unsigned int gdfIndex;
+    unsigned int gdfBytesPP;
+    unsigned int fg;
+    unsigned int bg;
+    unsigned int plnSizeX;
+    unsigned int plnSizeY;
+    unsigned int winSizeX;
+    unsigned int winSizeY;
+    char modeIdent[80];
+} GraphicDevice;
+
+static GraphicDevice panel;
+
+******************************************************************************/
 void *video_hw_init(void)
 {
 	int ret;
@@ -594,7 +622,7 @@ void *video_hw_init(void)
 		puts("Error initializing IPU\n");
 
 	ret = mxcfb_probe(gpixfmt, gdisp, gmode);
-	debug("Framebuffer at 0x%x\n", (unsigned int)panel.frameAdrs);
+	DEBUG_INFO("Framebuffer at 0x%x\n", (unsigned int)panel.frameAdrs);
 
 	return (void *)&panel;
 }
